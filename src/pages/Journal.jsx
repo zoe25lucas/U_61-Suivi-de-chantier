@@ -365,14 +365,15 @@ export default function Journal() {
   // 4. ACTIONS CONFIGURATION
   const savePeriods = async (newPeriods) => {
     try {
-      await supabase.from('journal_settings').upsert({
+      const { error } = await supabase.from('journal_settings').upsert({
         id: settingsId,
         periods: newPeriods
       });
+      if (error) throw error;
       setPeriods(newPeriods);
     } catch (err) {
-      console.error(err);
-      alert("Erreur lors de la sauvegarde des périodes.");
+      console.error("Erreur de sauvegarde des périodes :", err);
+      alert("Erreur lors de la sauvegarde des périodes : " + err.message);
     }
   };
 

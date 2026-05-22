@@ -90,10 +90,14 @@ export default function Formation() {
       if (!toSave.id) {
         toSave.id = '550e8400-e29b-41d4-a716-446655441111';
       }
-      await supabase.from('formation_profile').upsert(toSave);
+      const { error } = await supabase.from('formation_profile').upsert(toSave);
+      if (error) throw error;
       setFormation(toSave);
       setIsEditing(false);
-    } catch (err) { alert(err.message); }
+    } catch (err) { 
+      console.error("Erreur de sauvegarde de la formation :", err);
+      alert("Erreur lors de la sauvegarde : " + err.message); 
+    }
     finally { setSaving(false); }
   };
 

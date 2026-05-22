@@ -119,12 +119,18 @@ export const Admin = () => {
   };
 
   const promoteUser = async (targetId, status) => {
-    await supabase.from('profiles').update({ is_admin: status }).eq('id', targetId);
-    fetchUsers();
-    // Also dispatch event to update current UI if it's the current user
-    if (targetId === user.id) {
-       setIsAdminUser(status);
-       if (!status) disableEditMode();
+    try {
+      const { error } = await supabase.from('profiles').update({ is_admin: status }).eq('id', targetId);
+      if (error) throw error;
+      fetchUsers();
+      // Also dispatch event to update current UI if it's the current user
+      if (targetId === user.id) {
+         setIsAdminUser(status);
+         if (!status) disableEditMode();
+      }
+    } catch (err) {
+      console.error("Erreur de modification des droits admin :", err);
+      alert("Erreur lors de la mise à jour des droits : " + err.message);
     }
   };
 

@@ -314,10 +314,17 @@ export default function Entreprise() {
     setSaving(true);
     try {
       const toSave = { ...company, sections, org_data: orgData };
-      await supabase.from('company_profile').upsert(toSave);
+      if (!toSave.id) {
+        toSave.id = '550e8400-e29b-41d4-a716-446655442222';
+      }
+      const { error } = await supabase.from('company_profile').upsert(toSave);
+      if (error) throw error;
       setCompany(toSave);
       setIsEditing(false);
-    } catch (err) { alert(err.message); }
+    } catch (err) { 
+      console.error("Erreur de sauvegarde de l'entreprise :", err);
+      alert("Erreur lors de la sauvegarde : " + err.message); 
+    }
     finally { setSaving(false); }
   };
 
