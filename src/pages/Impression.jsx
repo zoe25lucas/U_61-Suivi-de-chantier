@@ -195,8 +195,8 @@ const Impression = () => {
         ] = await Promise.all([
           supabase.from('profiles').select('*').maybeSingle(),
           supabase.from('certifications').select('*'),
-          supabase.from('formations').select('*').maybeSingle(),
-          supabase.from('entreprise').select('*').maybeSingle(),
+          supabase.from('formation_profile').select('*').maybeSingle(),
+          supabase.from('company_profile').select('*').maybeSingle(),
           supabase.from('chantiers').select('*').order('created_at', { ascending: false }),
           supabase.from('journal_entries').select('*'),
           supabase.from('themes').select('*').order('created_at', { ascending: true })
@@ -1246,11 +1246,13 @@ const Impression = () => {
           @page { margin: 0; size: A4; }
           html, body { background-color: var(--bg) !important; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .impression-sidebar { display: none !important; }
+          .print-page-wrap:last-child { page-break-after: auto; }
+          .p-cover { height: 296mm; min-height: 0; overflow: hidden; }
         }
         body { margin: 0; background: #111; counter-reset: page; }
         .print-document { width: 210mm; margin: 0 auto; }
-        .print-page-wrap { 
-          width: 210mm; min-height: 297mm; padding: 60px 70px 100px; box-sizing: border-box;
+        .print-page-wrap {
+          width: 210mm; min-height: 296mm; padding: 60px 70px 100px; box-sizing: border-box;
           page-break-after: always; position: relative; background: var(--bg) !important; -webkit-print-color-adjust: exact;
           counter-increment: page;
         }
