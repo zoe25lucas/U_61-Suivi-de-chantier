@@ -9,6 +9,7 @@ import { Admin } from './pages/OtherPages';
 import Impression from './pages/Impression';
 import Journal from './pages/Journal';
 import Entreprise from './pages/Entreprise';
+import Themes from './pages/Themes';
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           <Route path="/entreprise" element={<Entreprise />} />
           <Route path="/journal" element={<Journal />} />
           <Route path="/chantiers" element={<Chantiers />} />
+          <Route path="/themes" element={<Themes />} />
           <Route path="/competences" element={<Competences />} />
           <Route path="/impression" element={<Impression />} />
           <Route path="/admin" element={<Admin />} />

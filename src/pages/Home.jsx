@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Building2, BookOpen, Star, User } from 'lucide-react';
+import { Building2, BookOpen, Star, User, GraduationCap, Briefcase, FolderOpen, Printer } from 'lucide-react';
 
 const Home = () => {
   return (
@@ -27,25 +27,37 @@ const Home = () => {
           </div>
         </div>
         <div className="hero-right">
-          <Link to="/chantiers" className="stat-card">
-            <div className="stat-icon"><Building2 size={15} strokeWidth={1.7} /></div>
-            <span className="stat-label">Section</span>
-            <span className="stat-title">Mes chantiers</span>
+          <Link to="/profil" className="stat-card">
+            <div className="stat-icon"><User size={15} strokeWidth={1.7} /></div>
+            <span className="stat-title">Mon profil</span>
+          </Link>
+          <Link to="/formation" className="stat-card">
+            <div className="stat-icon"><GraduationCap size={15} strokeWidth={1.7} /></div>
+            <span className="stat-title">Formation</span>
+          </Link>
+          <Link to="/entreprise" className="stat-card">
+            <div className="stat-icon"><Briefcase size={15} strokeWidth={1.7} /></div>
+            <span className="stat-title">Entreprise</span>
           </Link>
           <Link to="/journal" className="stat-card">
             <div className="stat-icon"><BookOpen size={15} strokeWidth={1.7} /></div>
-            <span className="stat-label">Section</span>
             <span className="stat-title">Journal quotidien</span>
+          </Link>
+          <Link to="/chantiers" className="stat-card">
+            <div className="stat-icon"><Building2 size={15} strokeWidth={1.7} /></div>
+            <span className="stat-title">Mes chantiers</span>
+          </Link>
+          <Link to="/themes" className="stat-card">
+            <div className="stat-icon"><FolderOpen size={15} strokeWidth={1.7} /></div>
+            <span className="stat-title">Thèmes d'étude</span>
           </Link>
           <Link to="/competences" className="stat-card">
             <div className="stat-icon"><Star size={15} strokeWidth={1.7} /></div>
-            <span className="stat-label">Section</span>
             <span className="stat-title">Compétences</span>
           </Link>
-          <Link to="/profil" className="stat-card">
-            <div className="stat-icon"><User size={15} strokeWidth={1.7} /></div>
-            <span className="stat-label">Section</span>
-            <span className="stat-title">Mon profil</span>
+          <Link to="/impression" className="stat-card">
+            <div className="stat-icon"><Printer size={15} strokeWidth={1.7} /></div>
+            <span className="stat-title">Impression</span>
           </Link>
         </div>
       </div>

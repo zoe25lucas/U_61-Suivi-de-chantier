@@ -303,54 +303,53 @@ nav {
 /* Cartes raccourcis */
 .hero-right {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  align-content: center;
 }
 
 .stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 22px;
-  padding: 24px 20px;
+  border-radius: 16px;
+  padding: 14px 18px;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
   text-align: left;
   font-family: 'Inter', sans-serif;
-  box-shadow: 0 2px 8px rgba(42,33,24,0.05);
+  box-shadow: 0 2px 6px rgba(42,33,24,0.02);
   text-decoration: none;
 }
 .stat-card:hover {
   border-color: var(--border-str);
-  box-shadow: 0 8px 28px rgba(42,33,24,0.10);
-  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(42,33,24,0.06);
+  transform: translateY(-1.5px);
 }
 
 .stat-icon {
-  width: 36px; height: 36px;
+  width: 32px; height: 32px;
   background: var(--accent-dim);
-  border-radius: 12px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 4px;
-  border: 1px solid rgba(139,110,78,0.18);
+  border: 1px solid rgba(139,110,78,0.15);
+  flex-shrink: 0;
 }
-.stat-icon svg { width: 15px; height: 15px; stroke: var(--accent-cord); }
+.stat-icon svg { width: 14px; height: 14px; stroke: var(--accent-cord); }
 
 .stat-label {
-  font-size: 9px;
-  color: var(--ink-dim);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  display: none;
 }
 
 .stat-title {
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--ink);
-  font-weight: 500;
+  font-weight: 600;
   font-family: 'Syne', sans-serif;
 }
 

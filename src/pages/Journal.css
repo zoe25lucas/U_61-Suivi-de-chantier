@@ -102,6 +102,8 @@
 .type-pont { background-color: rgba(168, 85, 247, 0.15); color: #9333ea; border: 1px solid rgba(168, 85, 247, 0.3); }
 .type-ferie { background-color: rgba(239, 68, 68, 0.2); color: #b91c1c; border: 1px solid rgba(239, 68, 68, 0.4); }
 .type-weekend { background-color: rgba(156, 163, 175, 0.1); color: #6b7280; border: 1px solid rgba(156, 163, 175, 0.2); }
+.type-maladie { background-color: rgba(236, 72, 153, 0.15); color: #be185d; border: 1px solid rgba(236, 72, 153, 0.3); }
+.type-intemperies { background-color: rgba(8, 145, 178, 0.15); color: #0e7490; border: 1px solid rgba(8, 145, 178, 0.3); }
 .type-none { background-color: transparent; border: 1px solid transparent; }
 
 .legend-dot.type-ecole { background-color: #3b82f6; border: none; }
@@ -109,6 +111,8 @@
 .legend-dot.type-conges { background-color: #10b981; border: none; }
 .legend-dot.type-pont { background-color: #9333ea; border: none; }
 .legend-dot.type-ferie { background-color: #b91c1c; border: none; }
+.legend-dot.type-maladie { background-color: #db2777; border: none; }
+.legend-dot.type-intemperies { background-color: #0891b2; border: none; }
 
 /* Calendar Grid */
 .calendar-grid {
@@ -150,6 +154,8 @@
   flex-direction: column;
   position: relative;
   transition: all 0.2s;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .calendar-day.today {
@@ -257,41 +263,105 @@
   background-color: rgba(168, 85, 247, 0.25);
 }
 
+.calendar-day.type-maladie {
+  background-color: rgba(236, 72, 153, 0.12);
+  opacity: 0.9;
+}
+
+.calendar-day.type-maladie:hover {
+  background-color: rgba(236, 72, 153, 0.22);
+}
+
+.calendar-day.type-intemperies {
+  background-color: rgba(8, 145, 178, 0.12);
+  opacity: 0.9;
+}
+
+.calendar-day.type-intemperies:hover {
+  background-color: rgba(8, 145, 178, 0.22);
+}
+
+.calendar-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
 .calendar-day-number {
   font-size: 13px;
   font-weight: 600;
   color: var(--ink);
-  margin-bottom: 4px;
 }
 
 .calendar-day-type {
-  font-size: 9px;
-  padding: 2px 6px;
+  font-size: 8px;
+  padding: 2px 5px;
   border-radius: 4px;
-  margin-top: 4px;
   text-transform: uppercase;
-  font-weight: 600;
-  display: inline-block;
-  align-self: flex-start;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* Liste des tâches du jour (compacte) */
 .calendar-day-tasks {
   margin-top: auto;
-  font-size: 10px;
-  color: var(--ink-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.day-task-chip {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--ink-mid);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 5px;
+  padding: 3px 6px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
-.calendar-day-tasks svg {
-  width: 12px;
-  height: 12px;
+.day-task-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-cord);
+  flex-shrink: 0;
 }
 
-.calendar-day-tasks.has-tasks {
+.day-task-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.day-task-chantier {
   color: var(--accent-cord);
-  font-weight: 600;
+  font-weight: 700;
+}
+
+.day-task-more {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  padding-left: 3px;
 }
 
 /* Modal / Overlay for Day Details */

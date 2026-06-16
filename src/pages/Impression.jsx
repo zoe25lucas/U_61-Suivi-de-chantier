@@ -1,7 +1,7 @@
 import React, { useState, useEffect, Fragment } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
-  Mail, Phone, MapPin, User, Clock, BookOpen, Award, ExternalLink, Building2, Globe, Star, Users, CheckSquare, Square, Briefcase, List
+  Mail, Phone, MapPin, User, Clock, BookOpen, Award, ExternalLink, Building2, Globe, Star, Users, CheckSquare, Square, Briefcase, List, FileText
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -101,19 +101,84 @@ const PrintMapUpdater = ({ center }) => {
   return null;
 };
 
+const extractCompId = (compStr) => {
+  if (!compStr) return null;
+  const match = String(compStr).match(/^(C\d+\.\d+|C\d+)/);
+  return match ? match[1] : null;
+};
+
+// Ordonne une liste de chantiers en arborescence : parent puis ses sous-chantiers
+const buildHierarchy = (chantiers) => {
+  const byParent = {};
+  chantiers.forEach(c => { if (c.parent_id) { (byParent[c.parent_id] = byParent[c.parent_id] || []).push(c); } });
+  const sortSub = (a, b) => String(a.numero || '').localeCompare(String(b.numero || ''), 'fr', { numeric: true });
+  const ordered = [];
+  chantiers.filter(c => !c.parent_id).forEach(root => {
+    const kids = (byParent[root.id] || []).slice().sort(sortSub);
+    ordered.push({ ...root, depth: 0, isParent: kids.length > 0 });
+    kids.forEach(k => ordered.push({ ...k, depth: 1, isParent: false }));
+  });
+  return ordered;
+};
+
+// Référentiel officiel U61 (couleurs + libellés), partagé carte chantier / tableau
+const COMPETENCES_REF = {
+  C2: {
+    title: "C2 - Exprimer techniquement le besoin du client", color: "#92bce3",
+    items: [
+      { id: "C2.1", label: "Recueillir les données" },
+      { id: "C2.2", label: "Traduire techniquement le besoin" },
+      { id: "C2.3", label: "Présenter et justifier les solutions proposées" },
+      { id: "C2.4", label: "Proposer des variantes techniques" },
+    ]
+  },
+  C15: {
+    title: "C15 - Gérer les dépenses et les recettes d'un chantier", color: "#fce83a",
+    items: [
+      { id: "C15.1", label: "Établir l'avancement des travaux y compris les travaux modificatifs" },
+      { id: "C15.2", label: "Établir une situation de travaux y compris les travaux modificatifs" },
+      { id: "C15.3", label: "Valider les factures des fournisseurs (bons de livraison – factures)" },
+      { id: "C15.4", label: "Récupérer et saisir les coûts réels des dépenses" },
+    ]
+  },
+  C16: {
+    title: "C16 - Conduire les travaux en phase de gros œuvre", color: "#a4e174",
+    items: [
+      { id: "C16.1", label: "Analyser les écarts sur la base des tableaux de bord établis" },
+      { id: "C16.2", label: "Contrôler l'exécution des ouvrages y compris les interfaces entre les corps d'états." },
+      { id: "C16.3", label: "Adapter les moyens en main d'œuvre et en matériel" },
+      { id: "C16.4", label: "Planifier et coordonner des interventions et des approvisionnements" },
+      { id: "C16.5", label: "Mettre à jour l'avancement des travaux et établir les mesures correctives." },
+      { id: "C16.6", label: "Gérer les imprévus." },
+      { id: "C16.7", label: "Compléter les documents du chantier (PPSPS, PAJ, fiches,...)" },
+      { id: "C16.8", label: "Vérifier la conformité des équipements, matériaux et matériels livrés" },
+      { id: "C16.9", label: "Faire respecter les dispositions d'hygiène, de sécurité et de protection de l'environnement." },
+    ]
+  },
+  C18: {
+    title: "C18 - Assurer la coordination avec les intervenants du chantier", color: "#f5b085",
+    items: [
+      { id: "C18.1", label: "Planifier et coordonner les interventions des corps d'état." },
+      { id: "C18.2", label: "Conduire une réunion de travail" },
+    ]
+  }
+};
+
 const Impression = () => {
-  const [data, setData] = useState({ profile: null, certifications: [], formation: null, entreprise: null, chantiers: [], journal: [] });
+  const [data, setData] = useState({ profile: null, certifications: [], formation: null, entreprise: null, chantiers: [], journal: [], themes: [] });
   const [loading, setLoading] = useState(true);
-  
+
   const [selection, setSelection] = useState({
     profil: true,
     formation: true,
     entreprise: true,
     chantiers: false,
+    themes: false,
     competences: false
   });
 
   const [selectedChantierIds, setSelectedChantierIds] = useState([]);
+  const [selectedThemeIds, setSelectedThemeIds] = useState([]);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -125,14 +190,16 @@ const Impression = () => {
           resForm,
           resEnt,
           resProjects,
-          resJournals
+          resJournals,
+          resThemes
         ] = await Promise.all([
           supabase.from('profiles').select('*').maybeSingle(),
           supabase.from('certifications').select('*'),
           supabase.from('formations').select('*').maybeSingle(),
           supabase.from('entreprise').select('*').maybeSingle(),
           supabase.from('chantiers').select('*').order('created_at', { ascending: false }),
-          supabase.from('journal_entries').select('*')
+          supabase.from('journal_entries').select('*'),
+          supabase.from('themes').select('*').order('created_at', { ascending: true })
         ]);
 
         setData({
@@ -141,11 +208,15 @@ const Impression = () => {
           formation: resForm.data,
           entreprise: resEnt.data,
           chantiers: resProjects.data || [],
-          journal: resJournals.data || []
+          journal: resJournals.data || [],
+          themes: resThemes.data || []
         });
 
         if (resProjects.data) {
           setSelectedChantierIds(resProjects.data.map(c => c.id));
+        }
+        if (resThemes.data) {
+          setSelectedThemeIds(resThemes.data.map(t => t.id));
         }
       } catch (err) {
         console.error("Error fetching all data for print:", err);
@@ -167,6 +238,79 @@ const Impression = () => {
   const formSections = formation.sections || [];
   const entSections = entreprise.sections || DEFAULT_COMPANY.sections;
   const avatarStyle = profile.avatar_style || { scale: 1, x: 0, y: 0 };
+
+  // --- Sommaire intelligent + pagination X/Y (selon la sélection) ---
+  const selectedSet = new Set(selection.chantiers ? selectedChantierIds : []);
+  // Arborescence des chantiers sélectionnés (parents inclus si un enfant est coché)
+  const orderedChantierRows = buildHierarchy(data.chantiers).filter(row =>
+    selectedSet.has(row.id) ||
+    (row.isParent && data.chantiers.some(c => c.parent_id === row.id && selectedSet.has(c.id)))
+  );
+  // Chantiers réellement imprimés = feuilles (sous-chantiers + chantiers indépendants), pas les groupes
+  const renderableChantiers = orderedChantierRows.filter(r => selectedSet.has(r.id) && !r.isParent);
+  const themesToPrint = selection.themes ? (data.themes || []).filter(t => selectedThemeIds.includes(t.id)) : [];
+
+  // Compétences réalisées par chantier (depuis le journal) — pour la matrice récap
+  const chantierCompsMap = {};
+  (data.journal || []).forEach(entry => {
+    let arr = entry.tasks;
+    if (typeof arr === 'string') { try { arr = JSON.parse(arr); } catch { arr = []; } }
+    if (!Array.isArray(arr)) arr = [];
+    arr.forEach(t => {
+      if (t && t.chantier_id) {
+        (Array.isArray(t.competences) ? t.competences : []).forEach(code => {
+          const id = extractCompId(code);
+          if (id) { (chantierCompsMap[t.chantier_id] = chantierCompsMap[t.chantier_id] || new Set()).add(id); }
+        });
+      }
+    });
+  });
+
+  // Récap chantiers scindé en blocs de colonnes pour tenir sur l'A4
+  const RECAP_CHUNK = 8;
+  const chantierChunks = [];
+  for (let i = 0; i < renderableChantiers.length; i += RECAP_CHUNK) {
+    chantierChunks.push(renderableChantiers.slice(i, i + RECAP_CHUNK));
+  }
+  const showRecapChantiers = selection.chantiers && renderableChantiers.length > 0;
+  const showRecapThemes = themesToPrint.length > 0;
+
+  const pagesProfil = selection.profil ? 2 : 0;
+  const pagesFormation = selection.formation ? 1 : 0;
+  const pagesEntreprise = selection.entreprise ? 2 : 0;
+  const pagesChantiers = renderableChantiers.length * 2; // 2 pages / chantier
+  const pagesRecapChantiers = showRecapChantiers ? chantierChunks.length : 0;
+  const pagesRecapThemes = showRecapThemes ? 1 : 0;
+  const pagesThemes = themesToPrint.length; // 1 page / thème
+  const pagesComp = selection.competences ? 1 : 0;
+  const hasAnySelection = (pagesProfil + pagesFormation + pagesEntreprise + pagesChantiers + pagesRecapChantiers + pagesRecapThemes + pagesThemes + pagesComp) > 0;
+
+  // Page 1 = couverture (toujours), page 2 = sommaire (si sélection), contenu ensuite
+  let pageCursor = 2 + (hasAnySelection ? 1 : 0);
+  const sectionPages = {};
+  if (pagesProfil) { sectionPages.profil = pageCursor; pageCursor += pagesProfil; }
+  if (pagesFormation) { sectionPages.formation = pageCursor; pageCursor += pagesFormation; }
+  if (pagesEntreprise) { sectionPages.entreprise = pageCursor; pageCursor += pagesEntreprise; }
+  // Récap chantiers AVANT les pages chantiers
+  if (pagesRecapChantiers) { sectionPages.recapChantiers = pageCursor; pageCursor += pagesRecapChantiers; }
+  const chantierPageMap = {};
+  renderableChantiers.forEach(r => { chantierPageMap[r.id] = pageCursor; pageCursor += 2; });
+  // Récap thèmes AVANT les pages thèmes
+  if (pagesRecapThemes) { sectionPages.recapThemes = pageCursor; pageCursor += pagesRecapThemes; }
+  const themePageMap = {};
+  themesToPrint.forEach(t => { themePageMap[t.id] = pageCursor; pageCursor += 1; });
+  if (pagesComp) { sectionPages.competences = pageCursor; pageCursor += pagesComp; }
+  const totalPages = pageCursor - 1;
+
+  // Numérotation séquentielle des thèmes IMPRIMÉS (si on en saute un, les suivants se renumérotent)
+  const themeNumberMap = {};
+  themesToPrint.forEach((t, i) => { themeNumberMap[t.id] = i + 1; });
+
+  // Sommaire cliquable : défile vers la page voulue (aperçu écran)
+  const goToPage = (id) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const renderTimeline = (content) => (
     <div className="print-timeline">
@@ -298,28 +442,32 @@ const Impression = () => {
 
       const groupedJournal = groupJournalEntries(journalTasks);
 
-      // Correct Skills Labeling
-      const COMPETENCES_DATA = {
-         "C16": { title: "C16 - RÉALISATION", items: [{ id: "C16.1", label: "Préparer des interventions" }, { id: "C16.2", label: "Extraire, terrasser, charger et transporter des matériaux" }, { id: "C16.3", label: "Poser des canalisations et des fourreaux" }, { id: "C16.4", label: "Planifier et coordonner des interventions et des approvisionnements" }, { id: "C16.5", label: "Clôturer une intervention" }] },
-         "C18": { title: "C18 - PILOTAGE", items: [{ id: "C18.1", label: "Planifier et coordonner les interventions des corps d'état" }, { id: "C18.2", label: "Réceptionner les supports de pose" }, { id: "C18.3", label: "Réceptionner l'ouvrage et ses équipements" }] }
-      };
-
-      const skillsLabels = (c.competencesMobilisees || []).map(code => {
-         if (!code) return "";
-         let label = code;
-         Object.values(COMPETENCES_DATA).forEach(group => {
-            const item = (group.items || []).find(it => it.id === code);
-            if (item) label = `${code} - ${item.label}`;
-         });
-         return label;
-      }).filter(l => l !== "");
+      // Compétences réellement mobilisées (depuis le journal), groupées par catégorie
+      const realizedIds = new Set();
+      journalTasks.forEach(t => {
+        (Array.isArray(t.competences) ? t.competences : []).forEach(code => {
+          const id = extractCompId(code);
+          if (id) realizedIds.add(id);
+        });
+      });
+      // Repli : si rien dans le journal, on prend les compétences cochées sur le chantier
+      if (realizedIds.size === 0) {
+        (c.competencesMobilisees || []).forEach(code => { const id = extractCompId(code); if (id) realizedIds.add(id); });
+      }
+      const realizedByCat = Object.entries(COMPETENCES_REF).map(([cat, data]) => ({
+        cat,
+        color: data.color,
+        title: data.title,
+        items: data.items.filter(it => realizedIds.has(it.id)),
+      })).filter(g => g.items.length > 0);
+      const realizedCount = realizedByCat.reduce((n, g) => n + g.items.length, 0);
 
       const hasValidCoords = Array.isArray(c.coordinates) && c.coordinates.length === 2 && !isNaN(c.coordinates[0]) && !isNaN(c.coordinates[1]);
 
       return (
         <React.Fragment key={c.id}>
           {/* PAGE 1: HEADER + MAP + INFO */}
-          <div className="print-page-wrap">
+          <div className="print-page-wrap" id={`pg-ch-${c.id}`}>
             <div className="p-header-top">
                <div className="p-header-left">
                   <div className="p-company-logo">SOGEA</div>
@@ -343,13 +491,36 @@ const Impression = () => {
               <div className="p-header-right-photo">
                 {c.photo_principale ? (
                   <div className="p-main-photo-frame">
-                     <img src={c.photo_principale} style={{ 
+                     <img src={c.photo_principale} style={{
                        transform: c.photo_principale_style ? `scale(${c.photo_principale_style.scale || 1}) translate(${c.photo_principale_style.x || 0}px, ${c.photo_principale_style.y || 0}px)` : 'none',
                        transformOrigin: 'center'
                      }} />
                   </div>
                 ) : <div className="p-no-photo">Pas de photo</div>}
               </div>
+            </div>
+
+            {/* COMPÉTENCES MOBILISÉES — en tête de page, visibles au premier coup d'œil */}
+            <div className="print-card p-comp-top">
+              <div className="p-card-head"><Award size={18}/> <span>Compétences mobilisées ({realizedCount})</span></div>
+              {realizedByCat.length > 0 ? (
+                <div className="p-comp-cats">
+                  {realizedByCat.map(g => (
+                    <div key={g.cat} className="p-comp-cat" style={{ borderLeft: `4px solid ${g.color}` }}>
+                      <div className="p-comp-cat-title">{g.title}</div>
+                      <div className="p-comp-pills">
+                        {g.items.map(it => (
+                          <span key={it.id} className="p-comp-pill" style={{ background: `${g.color}33`, borderColor: g.color }}>
+                            <strong>{it.id}</strong> {it.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="p-card-text" style={{ opacity: 0.6 }}>Aucune compétence enregistrée pour ce chantier.</p>
+              )}
             </div>
 
             <div className="p-large-map-section">
@@ -411,6 +582,7 @@ const Impression = () => {
                   </div>
                </div>
             </div>
+            <div className="page-context-footer">Mes Chantiers — {c.nom}</div>
             <div className="page-number-footer"></div>
           </div>
 
@@ -418,20 +590,11 @@ const Impression = () => {
           <div className="print-page-wrap">
              <div className="p-cards-grid-mixed">
                 <div className="p-mixed-col">
-                   {skillsLabels.length > 0 && (
+                   {c.illustrations && c.illustrations.length > 1 && (
                      <div className="print-card">
-                        <div className="p-card-head"><Award size={18}/> <span>Compétences Métier</span></div>
-                        <div className="p-skills-list-mini">
-                           {skillsLabels.map((s, idx) => {
-                              const code = s.split(' - ')[0];
-                              const catClass = code.startsWith('C16') ? '#E8F5E9' : code.startsWith('C18') ? '#FFF3E0' : '#f0f0f0';
-                              const border = code.startsWith('C16') ? '#C8E6C9' : code.startsWith('C18') ? '#FFE0B2' : '#ddd';
-                              return (
-                                <div key={idx} className="p-skill-item-mini" style={{ background: catClass, border: `1px solid ${border}` }}>
-                                  {s}
-                                </div>
-                              );
-                           })}
+                        <div className="p-card-head"><Globe size={18}/> <span>Galerie (suite)</span></div>
+                        <div className="p-gallery-preview-mini">
+                           <img src={c.illustrations[1].url} style={{ width: '100%', borderRadius: '10px' }} />
                         </div>
                      </div>
                    )}
@@ -478,6 +641,7 @@ const Impression = () => {
                   </div>
                 ))}
              </div>
+             <div className="page-context-footer">Mes Chantiers — {c.nom}</div>
              <div className="page-number-footer"></div>
           </div>
         </React.Fragment>
@@ -487,6 +651,240 @@ const Impression = () => {
       return <div className="print-page-wrap">Erreur lors de la génération de la page du chantier {c.nom}</div>;
     }
   };
+
+  // Tableau officiel U61 (Annexe 12) — version impression
+  const renderCompetencesU61 = () => (
+    <div className="print-page-wrap p-comp-table-page" id="pg-competences">
+      <div className="competences-header-text">
+        <h1>Annexe 12 - BTS « BÂTIMENT » - Épreuve U61 SUIVI DE CHANTIER – SESSION 2027</h1>
+        <h2>Fiche de cadrage et de suivi de période en entreprise (apprentissage)</h2>
+      </div>
+      <table className="competences-table">
+        <colgroup>
+          <col style={{ width: '9%' }} />
+          <col style={{ width: '23%' }} />
+          <col style={{ width: '4%' }} />
+          <col style={{ width: '4%' }} />
+          <col style={{ width: '4%' }} />
+          <col style={{ width: '6%' }} />
+          <col style={{ width: '6%' }} />
+          <col style={{ width: '6%' }} />
+          <col style={{ width: '6%' }} />
+          <col style={{ width: '7%' }} />
+          <col style={{ width: '12.5%' }} />
+          <col style={{ width: '12.5%' }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th colSpan="2" className="table-header-left">
+              <div className="etablissement-info">
+                <span>Etablissement : <strong>SOGEA EST BTP</strong></span>
+                <span>Ville : <em>KRAUTERGERSHEIM</em></span>
+              </div>
+              <div className="nom-prenom-info">
+                <span>Nom : <strong>LUCAS</strong></span>
+                <span>Prénom : <strong>Zoé</strong></span>
+              </div>
+            </th>
+            <th colSpan="3" className="text-center">DEBUT</th>
+            <th colSpan="4" className="text-center">FIN<br/><span className="sub-th">de stage ou apprentissage</span></th>
+            <th className="text-center">A compléter<br/>par :</th>
+            <th className="text-center">ATTESTATION DE DEBUT<br/><span className="sub-th">(d'apprentissage)</span></th>
+            <th className="text-center">ATTESTATION DE FIN<br/><span className="sub-th">(d'apprentissage)</span></th>
+          </tr>
+          <tr className="sub-headers">
+            <th colSpan="2" className="text-center">Compétences observables ou mobilisables qui doivent être présentées par le candidat pour l'épreuve U61.</th>
+            <th className="col-n">Non faisable<br/><strong>N</strong></th>
+            <th className="col-o">Observable<br/><strong>O</strong></th>
+            <th className="col-r">Réalisable<br/><strong>R</strong></th>
+            <th className="col-fin">n'a pas été confronté au problème</th>
+            <th className="col-fin">a entendu son tuteur en parler</th>
+            <th className="col-fin">a assisté son tuteur dans cette tâche</th>
+            <th className="col-fin">est intervenu en autonomie</th>
+            <th></th><th></th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {/* C2 */}
+          <tr>
+            <td rowSpan="4" className="bg-c2 cat-cell"><strong>C2</strong><br/>Exprimer techniquement le besoin du client</td>
+            <td><strong>C2.1 Recueillir</strong> les données</td>
+            <td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td>
+            <td rowSpan="8" className="text-center bold-text">Tuteur entreprise</td>
+            <td rowSpan="8" className="signature-cell">
+              <div style={{ fontSize: '11px', lineHeight: '1.4', textAlign: 'left' }}>
+                Accueil et présentation à l'agence réalisé au démarrage, suivi d'un accueil sécurité avec la RSE sur les attendus de l'entreprise.<br/><br/>
+                Dans un premier temps Zoé réalisera des études et assistera les conducteurs de travaux dans les préparations de chantier.<br/><br/>
+                Dans un 2ème temps Zoé participera +/- en autonomie aux suivis et organisation de chantier de petite et grande importance en fonction de ses acquis et de la complexité des chantiers.<br/><br/>
+                <strong>Benoît HERTZOG chef de secteur</strong><br/>Le 06/02/2026
+              </div>
+            </td>
+            <td rowSpan="8" className="signature-cell"></td>
+          </tr>
+          <tr><td><strong>C2.2 Traduire</strong> techniquement le besoin</td><td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td><strong>C2.3 Présenter</strong> et <strong>justifier</strong> les solutions proposées</td><td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td><strong>C2.4 Proposer</strong> des variantes techniques</td><td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td></tr>
+
+          {/* C15 */}
+          <tr>
+            <td rowSpan="4" className="bg-c15 cat-cell"><strong>C15</strong><br/>Gérer les dépenses et les recettes d'un chantier</td>
+            <td><strong>C15.1 Établir</strong> l'avancement des travaux y compris les travaux modificatifs</td>
+            <td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td>
+          </tr>
+          <tr><td><strong>C15.2 Établir</strong> une situation de travaux y compris les travaux modificatifs</td><td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td><strong>C15.3 Valider</strong> les factures des fournisseurs (bons de livraison – factures)</td><td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td><strong>C15.4 Récupérer</strong> et <strong>saisir</strong> les coûts réels des dépenses</td><td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td></tr>
+
+          {/* C16 */}
+          <tr>
+            <td rowSpan="9" className="bg-c16 cat-cell"><strong>C16</strong><br/>Conduire les travaux en phase de gros œuvre</td>
+            <td><strong>C16.1 Analyser</strong> les écarts sur la base des tableaux de bord établis</td>
+            <td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td>
+            <td rowSpan="4" className="text-center bold-text">Apprenti</td>
+            <td rowSpan="4" className="signature-cell"><div style={{ fontSize: '11px', textAlign: 'center' }}>Le 06.02.26<br/><br/><em>(Signature)</em></div></td>
+            <td rowSpan="4" className="signature-cell"></td>
+          </tr>
+          <tr><td><strong>C16.2 Contrôler</strong> l'exécution des ouvrages y compris les interfaces entre les corps d'états.</td><td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td><strong>C16.3 Adapter</strong> les moyens en main d'œuvre et en matériel</td><td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td><strong>C16.4 Planifier</strong> et <strong>coordonner</strong> des interventions et des approvisionnements</td><td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td></tr>
+          <tr>
+            <td><strong>C16.5 Mettre à jour</strong> l'avancement des travaux et <strong>établir</strong> les mesures correctives.</td>
+            <td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td>
+            <td rowSpan="5" className="text-center bold-text">Entreprise</td>
+            <td rowSpan="5" className="signature-cell"><div style={{ fontSize: '10px', textAlign: 'center' }}>Le 06.02.2026<br/><br/><strong>SOGEA EST BTP</strong><br/>Route de Krautersheim<br/>67880 KRAUTERGERSHEIM</div></td>
+            <td rowSpan="5" className="signature-cell"></td>
+          </tr>
+          <tr><td><strong>C16.6 Gérer</strong> les imprévus.</td><td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td><strong>C16.7 Compléter</strong> les documents du chantier (PPSPS, PAJ, fiches,...)</td><td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td><strong>C16.8 Vérifier</strong> la conformité des équipements, matériaux et matériels livrés</td><td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td><strong>C16.9 Faire respecter</strong> les dispositions d'hygiène, de sécurité et de protection de l'environnement.</td><td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td></tr>
+
+          {/* C18 */}
+          <tr>
+            <td rowSpan="2" className="bg-c18 cat-cell"><strong>C18</strong><br/>Assurer la coordination avec les intervenants du chantier</td>
+            <td><strong>C18.1 Planifier</strong> et <strong>coordonner</strong> les interventions des corps d'état.</td>
+            <td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td>
+            <td rowSpan="2" className="text-center bold-text text-sm">Centre de formation</td>
+            <td rowSpan="2" className="signature-cell center-bold">ROUSSEY FREDERIC</td>
+            <td rowSpan="2" className="signature-cell text-xs">(nom, remarques et signature du responsable du suivi du centre de formation)</td>
+          </tr>
+          <tr><td><strong>C18.2 Conduire</strong> une réunion de travail</td><td></td><td></td><td className="text-center bold-text">R</td><td></td><td></td><td></td><td></td></tr>
+        </tbody>
+      </table>
+      <div className="competences-footer" style={{ marginTop: '12px', fontSize: '10px', fontStyle: 'italic', opacity: 0.7 }}>
+        Document à renvoyer par l'entreprise au centre de formation en début de stage, et une seconde copie en fin de stage.
+      </div>
+      <div className="page-context-footer">Compétences — Tableau U61</div>
+      <div className="page-number-footer"></div>
+    </div>
+  );
+
+  // Page d'un thème d'étude
+  const renderThemePage = (theme) => {
+    const comps = theme.competences || [];
+    const linkedCh = data.chantiers.find(c => c.id === theme.chantier_id);
+    return (
+      <div className="print-page-wrap" key={theme.id} id={`pg-theme-${theme.id}`}>
+        <div className="p-header-top">
+          <div className="p-header-left">
+            <div className="p-company-logo">SOGEA</div>
+            <div className="p-eyebrow">THÈME D'ÉTUDE · THÈME N°{themeNumberMap[theme.id] || ''}</div>
+          </div>
+        </div>
+        <h1 className="p-chantier-title-main" style={{ marginBottom: '8px' }}>Thème N°{themeNumberMap[theme.id] || ''} — {theme.title}</h1>
+        {linkedCh && (
+          <div className="p-address-row" style={{ marginBottom: '14px' }}>
+            <Building2 size={14} color="var(--accent)" /> <span>Chantier associé : {linkedCh.nom}</span>
+          </div>
+        )}
+        {comps.length > 0 && (
+          <div className="print-card p-comp-top" style={{ marginBottom: '1.2rem' }}>
+            <div className="p-card-head"><Award size={18} /> <span>Compétences visées</span></div>
+            <div className="p-comp-pills" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              {comps.map(code => {
+                let color = '#cccccc';
+                Object.values(COMPETENCES_REF).forEach(g => { if (g.items.find(it => it.id === code)) color = g.color; });
+                return <span key={code} className="p-comp-pill" style={{ background: `${color}33`, borderColor: color }}><strong>{code}</strong></span>;
+              })}
+            </div>
+          </div>
+        )}
+        {(theme.sections || []).map(sec => (
+          <div className="print-card" key={sec.id}>
+            <div className="p-card-head"><FileText size={18} /> <span>{sec.title}</span></div>
+            {String(sec.text || '').split('\n').map((p, i) => (
+              <p className="p-card-text" key={i} style={{ margin: '2px 0' }}>{p}</p>
+            ))}
+            {(sec.images || []).length > 0 && (
+              <div className="p-theme-imgs">
+                {sec.images.slice(0, 3).map(img => <img key={img.id} src={img.url} alt={img.caption || ''} />)}
+              </div>
+            )}
+          </div>
+        ))}
+        <div className="page-context-footer">Thèmes — {theme.title}</div>
+        <div className="page-number-footer"></div>
+      </div>
+    );
+  };
+
+  // Matrice récap : compétences (lignes) × entités (colonnes numérotées), ✓ coloré
+  const renderRecapMatrix = (columns, compsOf, title, contextLabel, keyId, domId) => (
+    <div className="print-page-wrap p-comp-table-page" key={keyId} id={domId}>
+      <div className="competences-header-text">
+        <h1>{title}</h1>
+      </div>
+
+      {/* Légende : numéro → nom complet */}
+      <div className="recap-legend">
+        {columns.map((col, i) => (
+          <div className="recap-legend-item" key={col.id}>
+            <span className="recap-legend-num">{i + 1}</span>
+            <span className="recap-legend-name">{col.label}</span>
+          </div>
+        ))}
+      </div>
+
+      <table className="recap-table">
+        <colgroup>
+          <col style={{ width: '46%' }} />
+          {columns.map(c => <col key={c.id} />)}
+        </colgroup>
+        <thead>
+          <tr>
+            <th className="recap-comp-col">Compétences U61</th>
+            {columns.map((col, i) => (
+              <th key={col.id} className="recap-num-th">{i + 1}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(COMPETENCES_REF).map(([cat, cdata]) => (
+            <React.Fragment key={cat}>
+              <tr className="recap-cat-row" style={{ background: `${cdata.color}55` }}>
+                <td colSpan={columns.length + 1}>{cdata.title}</td>
+              </tr>
+              {cdata.items.map(it => (
+                <tr key={it.id}>
+                  <td className="recap-comp-col"><strong>{it.id}</strong> {it.label}</td>
+                  {columns.map(col => {
+                    const has = compsOf(col.id)?.has(it.id);
+                    return (
+                      <td key={col.id} style={{ textAlign: 'center' }}>
+                        {has ? <span className="recap-x" style={{ background: cdata.color }}>✓</span> : <span style={{ opacity: 0.25 }}>–</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+      <div className="page-context-footer">{contextLabel}</div>
+      <div className="page-number-footer"></div>
+    </div>
+  );
 
   return (
     <div className="impression-page">
@@ -500,26 +898,68 @@ const Impression = () => {
            <label className="select-item"><input type="checkbox" checked={selection.formation} onChange={e => setSelection({...selection, formation: e.target.checked})} /><span>Ma Formation</span></label>
            <label className="select-item"><input type="checkbox" checked={selection.entreprise} onChange={e => setSelection({...selection, entreprise: e.target.checked})} /><span>Mon Entreprise</span></label>
            <label className="select-item"><input type="checkbox" checked={selection.chantiers} onChange={e => setSelection({...selection, chantiers: e.target.checked})} /><span>Mes Chantiers</span></label>
+           <label className="select-item"><input type="checkbox" checked={selection.themes} onChange={e => setSelection({...selection, themes: e.target.checked})} /><span>Thèmes d'étude</span></label>
+           <label className="select-item"><input type="checkbox" checked={selection.competences} onChange={e => setSelection({...selection, competences: e.target.checked})} /><span>Compétences (Tableau U61)</span></label>
         </div>
 
         {selection.chantiers && (
           <div className="chantiers-selector">
              <div className="sel-head">
                 <span>SÉLECTION DES PROJETS</span>
-                <button onClick={() => setSelectedChantierIds(data.chantiers.map(c => c.id))}>TOUT</button>
+                <div className="sel-head-actions">
+                  <button onClick={() => setSelectedChantierIds(data.chantiers.map(c => c.id))}>TOUT</button>
+                  <button onClick={() => setSelectedChantierIds([])}>AUCUN</button>
+                </div>
              </div>
              <div className="sel-list">
-                {data.chantiers.map(c => (
-                  <label key={c.id} className="sel-chantier-item">
-                    <input 
-                      type="checkbox" 
-                      checked={selectedChantierIds.includes(c.id)} 
+                {buildHierarchy(data.chantiers).map(c => (
+                  <label key={c.id} className={`sel-chantier-item ${c.depth === 1 ? 'is-sub' : ''} ${c.isParent ? 'is-parent' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={selectedChantierIds.includes(c.id)}
                       onChange={e => {
-                        if(e.target.checked) setSelectedChantierIds([...selectedChantierIds, c.id]);
-                        else setSelectedChantierIds(selectedChantierIds.filter(id => id !== c.id));
-                      }} 
+                        if (e.target.checked) {
+                          // cocher un parent coche aussi ses sous-chantiers
+                          const ids = c.isParent
+                            ? [c.id, ...data.chantiers.filter(x => x.parent_id === c.id).map(x => x.id)]
+                            : [c.id];
+                          setSelectedChantierIds([...new Set([...selectedChantierIds, ...ids])]);
+                        } else {
+                          const ids = c.isParent
+                            ? new Set([c.id, ...data.chantiers.filter(x => x.parent_id === c.id).map(x => x.id)])
+                            : new Set([c.id]);
+                          setSelectedChantierIds(selectedChantierIds.filter(id => !ids.has(id)));
+                        }
+                      }}
                     />
-                    <span>{c.nom}</span>
+                    <span>{c.numero ? `Nº ${c.numero} · ` : ''}{c.nom}</span>
+                  </label>
+                ))}
+             </div>
+          </div>
+        )}
+
+        {selection.themes && (data.themes || []).length > 0 && (
+          <div className="chantiers-selector">
+             <div className="sel-head">
+                <span>SÉLECTION DES THÈMES</span>
+                <div className="sel-head-actions">
+                  <button onClick={() => setSelectedThemeIds((data.themes || []).map(t => t.id))}>TOUT</button>
+                  <button onClick={() => setSelectedThemeIds([])}>AUCUN</button>
+                </div>
+             </div>
+             <div className="sel-list">
+                {(data.themes || []).map(t => (
+                  <label key={t.id} className="sel-chantier-item">
+                    <input
+                      type="checkbox"
+                      checked={selectedThemeIds.includes(t.id)}
+                      onChange={e => {
+                        if (e.target.checked) setSelectedThemeIds([...new Set([...selectedThemeIds, t.id])]);
+                        else setSelectedThemeIds(selectedThemeIds.filter(id => id !== t.id));
+                      }}
+                    />
+                    <span>{t.title}</span>
                   </label>
                 ))}
              </div>
@@ -530,10 +970,125 @@ const Impression = () => {
       </div>
 
       <div className="impression-preview">
-        <div className="print-document">
+        <div className="print-document" style={{ '--total-pages': `"${totalPages}"` }}>
+          {/* PAGE DE GARDE (toujours présente) */}
+          <div className="print-page-wrap p-cover">
+            <div className="p-cover-accent"></div>
+
+            {/* Bandeau de logos en haut de page */}
+            <div className="p-cover-logos">
+              <div className="p-cover-logo-card">
+                <img src="/logo sogea.jpg" alt="SOGEA" />
+                <span className="p-cover-logo-sep"></span>
+                <img src={formation.avatar_url || '/UFA + CFA Acdemique.avif'} alt="CFA / Lycée Le Corbusier" />
+              </div>
+            </div>
+
+            <div className="p-cover-inner">
+              <div className="p-cover-eyebrow">Dossier professionnel · Épreuve U61 — Suivi de chantier</div>
+              <h1 className="p-cover-name">{(data.profile?.full_name || 'Zoé Lucas')}</h1>
+              <div className="p-cover-rule"></div>
+              <div className="p-cover-formation">BTS Bâtiment · Alternance</div>
+              <div className="p-cover-year">2025 — 2027</div>
+
+              {data.profile?.avatar_url && (
+                <div className="p-cover-portrait">
+                  <img
+                    src={data.profile.avatar_url}
+                    alt={data.profile.full_name}
+                    style={{ transform: avatarStyle ? `translate(-50%, -50%) translate(${avatarStyle.x || 0}px, ${avatarStyle.y || 0}px) scale(${avatarStyle.scale || 1})` : 'translate(-50%, -50%)' }}
+                  />
+                </div>
+              )}
+
+              <div className="p-cover-info">
+                <div className="p-cover-info-item">
+                  <span className="p-cover-info-label">Établissement de formation</span>
+                  <span className="p-cover-info-value">Lycée polyvalent Le Corbusier</span>
+                </div>
+                <div className="p-cover-info-item">
+                  <span className="p-cover-info-label">Entreprise d'accueil</span>
+                  <span className="p-cover-info-value">{entreprise.name || 'SOGEA Environnement'}</span>
+                </div>
+                <div className="p-cover-info-item">
+                  <span className="p-cover-info-label">Maître d'apprentissage</span>
+                  <span className="p-cover-info-value">Benoît HERTZOG</span>
+                </div>
+                <div className="p-cover-info-item">
+                  <span className="p-cover-info-label">Période</span>
+                  <span className="p-cover-info-value">Septembre 2025 — Août 2027</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SOMMAIRE INTELLIGENT (généré selon la sélection) */}
+          {hasAnySelection && (
+            <div className="print-page-wrap p-toc-page">
+              <div className="p-header-main" style={{ marginBottom: '3rem' }}>
+                <div className="p-info-box">
+                  <div className="p-eyebrow">DOSSIER TECHNIQUE U61</div>
+                  <h1 className="p-name">Sommaire</h1>
+                  <div className="p-sub">{data.profile?.full_name || 'ZOÉ LUCAS'} — BTS Bâtiment en alternance</div>
+                </div>
+              </div>
+              <div className="p-toc-list">
+                {sectionPages.profil && (
+                  <div className="p-toc-row clickable" onClick={() => goToPage('pg-profil')}><span className="p-toc-label">Mon Profil</span><span className="p-toc-dots"></span><span className="p-toc-page">p. {sectionPages.profil}</span></div>
+                )}
+                {sectionPages.formation && (
+                  <div className="p-toc-row clickable" onClick={() => goToPage('pg-formation')}><span className="p-toc-label">Ma Formation</span><span className="p-toc-dots"></span><span className="p-toc-page">p. {sectionPages.formation}</span></div>
+                )}
+                {sectionPages.entreprise && (
+                  <div className="p-toc-row clickable" onClick={() => goToPage('pg-entreprise')}><span className="p-toc-label">Mon Entreprise</span><span className="p-toc-dots"></span><span className="p-toc-page">p. {sectionPages.entreprise}</span></div>
+                )}
+
+                {/* Arborescence des chantiers (récap avant) */}
+                {orderedChantierRows.length > 0 && (
+                  <>
+                    <div className="p-toc-section-head">Mes Chantiers</div>
+                    {sectionPages.recapChantiers && (
+                      <div className="p-toc-row clickable" onClick={() => goToPage('pg-recap-chantiers')}><span className="p-toc-label">Récapitulatif des compétences</span><span className="p-toc-dots"></span><span className="p-toc-page">p. {sectionPages.recapChantiers}</span></div>
+                    )}
+                    {orderedChantierRows.map(row => (
+                      <div key={row.id} className={`p-toc-row toc-depth-${row.depth} ${row.isParent ? 'is-parent' : 'clickable'}`} onClick={row.isParent ? undefined : () => goToPage(`pg-ch-${row.id}`)}>
+                        <span className="p-toc-label">{row.nom}</span>
+                        {!row.isParent && <span className="p-toc-dots"></span>}
+                        {!row.isParent && <span className="p-toc-page">p. {chantierPageMap[row.id]}</span>}
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {/* Thèmes d'étude (récap avant) */}
+                {themesToPrint.length > 0 && (
+                  <>
+                    <div className="p-toc-section-head">Thèmes d'étude</div>
+                    {sectionPages.recapThemes && (
+                      <div className="p-toc-row clickable" onClick={() => goToPage('pg-recap-themes')}><span className="p-toc-label">Récapitulatif des compétences</span><span className="p-toc-dots"></span><span className="p-toc-page">p. {sectionPages.recapThemes}</span></div>
+                    )}
+                    {themesToPrint.map(t => (
+                      <div key={t.id} className="p-toc-row toc-depth-1 clickable" onClick={() => goToPage(`pg-theme-${t.id}`)}>
+                        <span className="p-toc-label">Thème N°{themeNumberMap[t.id]} — {t.title}</span>
+                        <span className="p-toc-dots"></span>
+                        <span className="p-toc-page">p. {themePageMap[t.id]}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {sectionPages.competences && (
+                  <div className="p-toc-row clickable" style={{ marginTop: '8px' }} onClick={() => goToPage('pg-competences')}><span className="p-toc-label">Compétences — Tableau U61</span><span className="p-toc-dots"></span><span className="p-toc-page">p. {sectionPages.competences}</span></div>
+                )}
+              </div>
+              <div className="page-context-footer">Sommaire</div>
+              <div className="page-number-footer"></div>
+            </div>
+          )}
+
           {selection.profil && (
             <>
-              <div className="print-page-wrap">
+              <div className="print-page-wrap" id="pg-profil">
                 <div className="p-header-main">
                   <div className="p-avatar-box"><div className="p-avatar-ring">
                     <img src={profile.avatar_url} style={{ position: 'absolute', top: '50%', left: '50%', transform: `translate(-50%, -50%) translate(${avatarStyle.x}px, ${avatarStyle.y}px) scale(${avatarStyle.scale})`, minWidth: '100%', minHeight: '100%', width: 'auto', height: 'auto', maxWidth: 'none', maxHeight: 'none' }} />
@@ -557,6 +1112,7 @@ const Impression = () => {
                       {sections.filter(s => s.column === 'RIGHT' && s.title?.includes('Expériences')).map(renderSection)}
                    </div>
                 </div>
+                <div className="page-context-footer">Mon Profil — {profile.full_name}</div>
                 <div className="page-number-footer"></div>
               </div>
               <div className="print-page-wrap">
@@ -570,13 +1126,14 @@ const Impression = () => {
                       {!sections.find(s => s.title?.toLowerCase().includes('langue')) && renderSection({ id: 'lang', title: 'Langues', type: 'CUSTOM' })}
                    </div>
                 </div>
+                <div className="page-context-footer">Mon Profil — {profile.full_name}</div>
                 <div className="page-number-footer"></div>
               </div>
             </>
           )}
 
           {selection.formation && (
-            <div className="print-page-wrap">
+            <div className="print-page-wrap" id="pg-formation">
                <div className="p-header-main formation-header">
                   <div className="p-avatar-box formation-logo-box">
                      <div className="logo-stripes-bg"><img src={formation.avatar_url} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} /></div>
@@ -597,13 +1154,14 @@ const Impression = () => {
                   </div>
                   <div className="p-col-right">{formSections.filter(s => s.column === 'RIGHT').map(renderSection)}</div>
                </div>
+               <div className="page-context-footer">Ma Formation</div>
                <div className="page-number-footer"></div>
             </div>
           )}
 
           {selection.entreprise && (
             <>
-              <div className="print-page-wrap">
+              <div className="print-page-wrap" id="pg-entreprise">
                 <div className="p-header-main formation-header">
                   <div className="p-avatar-box">
                     <div className="p-avatar-ring" style={{ width: '130px', height: '130px', background: 'white !important', border: '3.5px solid var(--accent)' }}>
@@ -636,6 +1194,7 @@ const Impression = () => {
                     {entSections.map(renderSection)}
                   </div>
                 </div>
+                <div className="page-context-footer">Mon Entreprise</div>
                 <div className="page-number-footer"></div>
               </div>
 
@@ -644,39 +1203,39 @@ const Impression = () => {
                 <div className="print-org-tree-container">
                   {entreprise.org_data ? renderOrgNode(entreprise.org_data) : renderOrgNode(DEFAULT_COMPANY.org_data)}
                 </div>
+                <div className="page-context-footer">Mon Entreprise — Organigramme</div>
                 <div className="page-number-footer"></div>
               </div>
             </>
           )}
 
-          {selection.chantiers && chantiersSelectionnes.length > 0 && (
-            <>
-              {/* Sommaire des chantiers */}
-              <div className="print-page-wrap">
-                <div className="p-header-main" style={{ marginBottom: '4rem' }}>
-                   <div className="p-info-box">
-                      <div className="p-eyebrow">RÉCAPITULATIF TECHNIQUE</div>
-                      <h1 className="p-name" style={{ fontSize: '42px' }}>Sommaire des Réalisations</h1>
-                   </div>
-                </div>
-                <div className="p-sommaire-grid">
-                   {chantiersSelectionnes.map((c, idx) => (
-                     <div key={c.id} className="p-sommaire-item">
-                        <div className="p-som-num">{(idx + 1).toString().padStart(2, '0')}</div>
-                        <div className="p-som-content">
-                           <div className="p-som-name">{c.nom}</div>
-                           <div className="p-som-meta">{c.maitreOuvrage || 'Client N/C'} — {c.lieu?.split(',')[0]}</div>
-                        </div>
-                     </div>
-                   ))}
-                </div>
-                <div className="page-number-footer"></div>
-              </div>
+          {/* Récapitulatif des compétences par chantier (AVANT les pages chantiers, scindé si nécessaire) */}
+          {showRecapChantiers && chantierChunks.map((chunk, i) => renderRecapMatrix(
+            chunk.map(c => ({ id: c.id, label: c.nom })),
+            (id) => chantierCompsMap[id],
+            `Récapitulatif des compétences — Chantiers${chantierChunks.length > 1 ? ` (${i + 1}/${chantierChunks.length})` : ''}`,
+            'Récapitulatif — Chantiers',
+            `recap-ch-${i}`,
+            i === 0 ? 'pg-recap-chantiers' : undefined
+          ))}
 
-              {/* Pages individuelles */}
-              {chantiersSelectionnes.map(renderChantierPage)}
-            </>
+          {/* Pages chantiers (feuilles uniquement, dans l'ordre de l'arborescence) */}
+          {renderableChantiers.map(renderChantierPage)}
+
+          {/* Récapitulatif des compétences par thème (AVANT les pages thèmes) */}
+          {showRecapThemes && renderRecapMatrix(
+            themesToPrint.map(t => ({ id: t.id, label: `Thème N°${themeNumberMap[t.id]} — ${t.title}` })),
+            (id) => new Set((themesToPrint.find(t => t.id === id)?.competences) || []),
+            'Récapitulatif des compétences — Thèmes',
+            'Récapitulatif — Thèmes',
+            'recap-themes',
+            'pg-recap-themes'
           )}
+
+          {/* Pages thèmes (avant les compétences) */}
+          {themesToPrint.map(renderThemePage)}
+
+          {selection.competences && renderCompetencesU61()}
         </div>
       </div>
 
@@ -704,7 +1263,9 @@ const Impression = () => {
           }
         }
         .page-number-footer { position: absolute; bottom: 30px; right: 60px; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 800; color: var(--accent); letter-spacing: 1.5px; opacity: 0.6; text-transform: uppercase; z-index: 100; }
-        .page-number-footer::after { content: "| PAGE " counter(page); }
+        .page-number-footer::after { content: "PAGE " counter(page) " / " var(--total-pages, ""); }
+        .page-context-footer { position: absolute; bottom: 30px; left: 70px; font-size: 10px; font-family: 'Inter', sans-serif; font-weight: 800; color: var(--accent); letter-spacing: 1.2px; opacity: 0.55; text-transform: uppercase; z-index: 100; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .p-comp-table-page .page-context-footer { left: 28px; }
         .p-eyebrow { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 11px; color: var(--accent); margin-bottom: 8px; letter-spacing: 3.5px; text-transform: uppercase; }
         .p-contact-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 15px; }
         .p-chip { background: white !important; border: 1px solid var(--border); border-radius: 20px; padding: 6px 12px; font-size: 10.5px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; width: auto; -webkit-print-color-adjust: exact; }
@@ -766,15 +1327,30 @@ const Impression = () => {
         .p-som-name { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 18px; text-transform: uppercase; }
         .p-som-meta { font-size: 12px; opacity: 0.6; margin-top: 4px; font-weight: 500; }
 
+        /* Arborescence du sommaire des réalisations */
+        .p-som-tree { display: flex; flex-direction: column; }
+        .p-som-row { display: flex; align-items: baseline; gap: 12px; padding: 11px 8px; border-bottom: 1px solid var(--border); }
+        .p-som-row.depth-1 { padding-left: 38px; border-bottom: 1px dashed var(--border); }
+        .p-som-row.depth-1::before { content: "└"; color: var(--accent); opacity: 0.5; margin-right: 2px; }
+        .p-som-row.is-parent { background: rgba(139,110,78,0.06) !important; -webkit-print-color-adjust: exact; border-radius: 8px; margin-top: 8px; }
+        .p-som-row .p-som-numero { font-family: 'Courier New', monospace; font-size: 11px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+        .p-som-row .p-som-name { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; text-transform: none; }
+        .p-som-row.is-parent .p-som-name { font-size: 16px; font-weight: 900; }
+        .p-som-row .p-som-meta { margin: 0 0 0 auto; font-size: 11px; opacity: 0.6; text-align: right; max-width: 45%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
         /* Styles Sidebar Extension */
         .impression-sidebar { position: fixed; left: 0; top: 0; width: 300px; height: 100vh; background: #1A1A1A; padding: 30px; color: white; box-sizing: border-box; display: flex; flex-direction: column; gap: 1.5rem; border-right: 1px solid rgba(255,255,255,0.1); overflow-y: auto; }
         .select-item { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 8px 10px; border-radius: 8px; transition: 0.2s; font-family: 'Inter'; font-weight: 600; font-size: 14px; }
         .chantiers-selector { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
         .sel-head { display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 800; letter-spacing: 1px; color: rgba(255,255,255,0.4); }
         .sel-head button { background: none; border: none; color: var(--accent); font-weight: 900; cursor: pointer; font-size: 10px; text-decoration: underline; }
+        .sel-head-actions { display: flex; gap: 10px; }
         .sel-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; padding-right: 5px; }
         .sel-chantier-item { display: flex; align-items: center; gap: 10px; font-size: 12px; cursor: pointer; padding: 4px; opacity: 0.7; }
         .sel-chantier-item:hover { opacity: 1; }
+        .sel-chantier-item.is-parent { opacity: 1; font-weight: 800; }
+        .sel-chantier-item.is-sub { padding-left: 22px; font-size: 11px; opacity: 0.6; }
+        .sel-chantier-item.is-sub::before { content: "└"; opacity: 0.5; margin-right: -4px; }
         .btn-print-action { margin-top: auto; padding: 18px; background: var(--accent); color: white; border: none; border-radius: 12px; font-weight: 800; cursor: pointer; font-family: 'Syne'; flex-shrink: 0; }
         @media screen { .impression-preview { margin-left: 300px; padding: 40px; } }
 
@@ -825,6 +1401,94 @@ const Impression = () => {
         .p-card-head-mini { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 800; color: var(--accent); opacity: 0.5; margin-bottom: 1.5rem; letter-spacing: 1px; }
         .p-checklist-dots { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px; }
         .p-checklist-dots li { font-size: 12px; font-weight: 600; line-height: 1.4; color: var(--ink); opacity: 0.9; }
+
+        /* Compétences en tête de page chantier */
+        .p-comp-top { margin-bottom: 1.5rem; }
+        .p-comp-cats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .p-comp-cat { background: white !important; border: 1px solid var(--border); border-left-width: 4px; border-radius: 14px; padding: 12px 14px; -webkit-print-color-adjust: exact; break-inside: avoid; }
+        .p-comp-cat-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink); margin-bottom: 8px; }
+        .p-comp-pills { display: flex; flex-direction: column; gap: 6px; }
+        .p-comp-pill { font-size: 10.5px; line-height: 1.35; color: var(--ink); padding: 5px 9px; border-radius: 7px; border: 1px solid; -webkit-print-color-adjust: exact; }
+        .p-comp-pill strong { margin-right: 5px; }
+
+        /* PAGE DE GARDE */
+        .p-cover { display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .p-cover-accent { position: absolute; top: -120px; right: -120px; width: 320px; height: 320px; background: var(--accent) !important; opacity: 0.08; transform: rotate(45deg); -webkit-print-color-adjust: exact; }
+        .p-cover::before { content: ''; position: absolute; bottom: -130px; left: -130px; width: 300px; height: 300px; background: var(--accent) !important; opacity: 0.06; transform: rotate(45deg); -webkit-print-color-adjust: exact; }
+        .p-cover-inner { position: relative; z-index: 2; width: 100%; max-width: 520px; text-align: center; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .p-cover-logos { position: absolute; top: 56px; left: 0; right: 0; z-index: 3; display: flex; justify-content: center; }
+        .p-cover-logo-card { background: #ffffff !important; border: 1px solid var(--border); border-radius: 18px; padding: 16px 34px; display: flex; align-items: center; justify-content: center; gap: 30px; box-shadow: 0 6px 18px rgba(44,35,24,0.06); -webkit-print-color-adjust: exact; }
+        .p-cover-logo-card img { height: 58px; width: auto; max-width: 170px; object-fit: contain; }
+        .p-cover-logo-sep { width: 1px; height: 50px; background: var(--border); flex-shrink: 0; }
+        .p-cover-eyebrow { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); margin-bottom: 18px; }
+        .p-cover-name { font-family: 'Playfair Display', serif; font-size: 64px; font-weight: 900; color: var(--ink); line-height: 1; margin: 0; }
+        .p-cover-rule { width: 80px; height: 3px; background: var(--accent) !important; border-radius: 3px; margin: 22px 0 18px; -webkit-print-color-adjust: exact; }
+        .p-cover-formation { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--ink); opacity: 0.85; }
+        .p-cover-year { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700; color: var(--accent); margin-top: 6px; letter-spacing: 1px; }
+        .p-cover-portrait { width: 150px; height: 150px; border-radius: 50%; border: 3px solid var(--accent); overflow: hidden; position: relative; margin: 38px 0; flex-shrink: 0; -webkit-print-color-adjust: exact; }
+        .p-cover-portrait img { position: absolute; top: 50%; left: 50%; min-width: 100%; min-height: 100%; width: auto; height: auto; }
+        .p-cover-info { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; margin-top: 14px; }
+        .p-cover-info-item { background: var(--bg-card) !important; border: 1px solid var(--border); border-radius: 16px; padding: 14px 18px; text-align: left; -webkit-print-color-adjust: exact; }
+        .p-cover-info-label { display: block; font-family: 'Inter', sans-serif; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 4px; }
+        .p-cover-info-value { display: block; font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; color: var(--ink); line-height: 1.2; }
+
+        /* SOMMAIRE intelligent */
+        .p-toc-list { display: flex; flex-direction: column; gap: 2px; margin-top: 1rem; }
+        .p-toc-row { display: flex; align-items: baseline; gap: 14px; padding: 10px 6px; border-bottom: 1px solid var(--border); }
+        .p-toc-row.clickable { cursor: pointer; border-radius: 8px; transition: background 0.15s ease; }
+        @media screen { .p-toc-row.clickable:hover { background: rgba(139,110,78,0.08); } .p-toc-row.clickable:hover .p-toc-label { color: var(--accent); } }
+        .p-toc-label { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 700; color: var(--ink); }
+        .p-toc-dots { flex: 1; border-bottom: 2px dotted var(--border); align-self: flex-end; margin-bottom: 4px; }
+        .p-toc-page { font-size: 13px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+        .p-toc-section-head { font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); margin: 18px 0 4px; }
+        .p-toc-row.toc-depth-1 { padding-left: 26px; border-bottom: 1px dashed var(--border); }
+        .p-toc-row.toc-depth-1 .p-toc-label { font-size: 14px; font-weight: 600; font-family: 'Inter', sans-serif; }
+        .p-toc-row.toc-depth-1::before { content: "└"; color: var(--accent); opacity: 0.5; }
+        .p-toc-row.is-parent .p-toc-label { font-size: 15px; font-weight: 900; }
+        .p-theme-imgs { display: flex; gap: 8px; margin-top: 10px; }
+        .p-theme-imgs img { flex: 1; max-width: 33%; border-radius: 10px; max-height: 130px; object-fit: cover; }
+
+        /* Matrice récapitulative des compétences */
+        .recap-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; margin: 6px 0 14px; padding: 12px 14px; background: var(--bg-card) !important; border: 1px solid var(--border); border-radius: 12px; -webkit-print-color-adjust: exact; }
+        .recap-legend-item { display: flex; align-items: baseline; gap: 8px; font-size: 10px; }
+        .recap-legend-num { flex-shrink: 0; width: 18px; height: 18px; line-height: 18px; text-align: center; border-radius: 5px; background: var(--accent) !important; color: #fff !important; font-weight: 800; font-size: 9px; -webkit-print-color-adjust: exact; }
+        .recap-legend-name { color: var(--ink); line-height: 1.25; }
+        .recap-table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; background: #fff !important; -webkit-print-color-adjust: exact; }
+        .recap-table th, .recap-table td { border: 1px solid var(--border); padding: 5px 4px; }
+        .recap-comp-col { text-align: left; vertical-align: middle; }
+        .recap-comp-col strong { color: var(--ink); margin-right: 4px; }
+        .recap-num-th { text-align: center; font-weight: 800; font-size: 11px; color: var(--accent); background: var(--bg-card) !important; -webkit-print-color-adjust: exact; }
+        .recap-cat-row td { font-weight: 800; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink); -webkit-print-color-adjust: exact; }
+        .recap-x { display: inline-block; width: 17px; height: 17px; line-height: 17px; border-radius: 4px; font-weight: 900; font-size: 10px; color: #000; -webkit-print-color-adjust: exact; }
+
+        /* Tableau officiel U61 — PORTRAIT, condensé pour tenir sur une page A4 */
+        .p-comp-table-page { padding: 35px 28px 80px !important; }
+        .competences-header-text { text-align: center; margin-bottom: 10px; }
+        .competences-header-text h1 { font-size: 12px; font-weight: bold; margin: 0 0 3px; text-transform: uppercase; }
+        .competences-header-text h2 { font-size: 13px; font-weight: bold; margin: 0; }
+        .competences-table { width: 100%; border-collapse: collapse; font-size: 9px; border: 2px solid #000; background: #fff !important; -webkit-print-color-adjust: exact; table-layout: fixed; }
+        .competences-table th, .competences-table td { border: 1px solid #000; padding: 2px 3px; vertical-align: middle; word-wrap: break-word; }
+        .competences-table thead th { background-color: #f2f2f2 !important; -webkit-print-color-adjust: exact; }
+        .competences-table tbody td { height: 16px; line-height: 1.2; }
+        .table-header-left { text-align: left; vertical-align: top !important; font-size: 9px; }
+        .etablissement-info { display: flex; flex-direction: column; margin-bottom: 6px; gap: 2px; }
+        .nom-prenom-info { display: flex; justify-content: space-between; }
+        .competences-table .text-center { text-align: center; }
+        .sub-th { font-weight: normal; font-style: italic; font-size: 8px; }
+        .sub-headers th { font-size: 8px; font-weight: normal; }
+        .col-n, .col-o, .col-r { color: red; }
+        .col-fin { font-size: 7.5px; }
+        .cat-cell { text-align: center; font-weight: bold; }
+        .bg-c2 { background-color: #92bce3 !important; -webkit-print-color-adjust: exact; }
+        .bg-c15 { background-color: #fce83a !important; -webkit-print-color-adjust: exact; }
+        .bg-c16 { background-color: #a4e174 !important; -webkit-print-color-adjust: exact; }
+        .bg-c18 { background-color: #f5b085 !important; -webkit-print-color-adjust: exact; }
+        .bold-text { font-weight: bold; }
+        .competences-table .text-sm { font-size: 8px; }
+        .competences-table .text-xs { font-size: 7.5px; text-align: center; }
+        .signature-cell { font-size: 8px; font-style: italic; text-align: center; }
+        .signature-cell div { font-size: 8px !important; line-height: 1.25 !important; }
+        .center-bold { font-weight: bold; text-align: center; font-style: normal; }
       `}</style>
     </div>
   );

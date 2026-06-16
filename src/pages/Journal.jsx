@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { 
-  ChevronLeft, ChevronRight, Plus, Trash2, Calendar, Settings, FileText, CheckCircle, Briefcase, GraduationCap, Tent, MapPin, Edit2, ChevronDown
+import {
+  ChevronLeft, ChevronRight, Plus, Trash2, Calendar, Settings, FileText, CheckCircle, Briefcase, GraduationCap, Tent, MapPin, Edit2, ChevronDown, Save, Bookmark
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import './Journal.css';
@@ -52,6 +52,17 @@ const COMPETENCES_GROUPS = [
   }
 ];
 
+// Libellés lisibles des types de journée
+const TYPE_LABELS = {
+  entreprise: 'Entreprise',
+  ecole: 'École',
+  conges: 'Congés',
+  pont: 'Pont',
+  ferie: 'Férié',
+  maladie: 'Arrêt maladie',
+  intemperies: 'Intempéries',
+};
+
 // ---- FONCTIONS UTILITAIRES CALENDRIER ----
 const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
 const getFirstDayOfMonth = (year, month) => {
@@ -100,6 +111,8 @@ export default function Journal() {
   const [newTaskCompetences, setNewTaskCompetences] = useState([]);
   const [newTaskEndDate, setNewTaskEndDate] = useState('');
   const [editingTaskId, setEditingTaskId] = useState(null);
+  const [taskTemplates, setTaskTemplates] = useState([]); // modèles de tâches récurrentes
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pickerCurrentDate, setPickerCurrentDate] = useState(new Date());
 
@@ -125,6 +138,7 @@ export default function Journal() {
         const { data: settings } = await supabase.from('journal_settings').select('*').maybeSingle();
         if (settings) {
           if (settings.periods) setPeriods(settings.periods);
+          if (settings.task_templates) setTaskTemplates(settings.task_templates);
           setSettingsId(settings.id);
         }
       } catch (err) { console.error("Erreur settings:", err); }
@@ -311,6 +325,7 @@ export default function Journal() {
       setNewTaskCompetences([]);
       setNewTaskEndDate('');
       setEditingTaskId(null);
+      setSelectedTemplateId('');
     } catch (err) {
       console.error(err);
       alert("Erreur lors de la sauvegarde de la tâche.");
@@ -330,6 +345,7 @@ export default function Journal() {
     setNewTaskChantier('');
     setNewTaskCompetences([]);
     setNewTaskEndDate('');
+    setSelectedTemplateId('');
   };
 
   const deleteTask = async (taskId) => {
@@ -360,6 +376,50 @@ export default function Journal() {
     };
     savePeriods([...periods, newPeriod]);
     setSelectedDay({ ...selectedDay, type: newType });
+  };
+
+  // 4bis. MODÈLES DE TÂCHES RÉCURRENTES
+  const saveTemplates = async (next) => {
+    try {
+      const { error } = await supabase.from('journal_settings').upsert({
+        id: settingsId,
+        task_templates: next
+      });
+      if (error) throw error;
+      setTaskTemplates(next);
+    } catch (err) {
+      console.error("Erreur de sauvegarde des modèles :", err);
+      alert("Erreur lors de la sauvegarde du modèle : " + err.message);
+    }
+  };
+
+  const applyTemplate = (id) => {
+    setSelectedTemplateId(id);
+    const tpl = taskTemplates.find(t => t.id === id);
+    if (!tpl) return;
+    setNewTaskContent(tpl.content || '');
+    setNewTaskCompetences(tpl.competences || []);
+  };
+
+  const saveCurrentAsTemplate = () => {
+    if (!newTaskContent.trim()) {
+      alert("Renseignez d'abord la description de la tâche.");
+      return;
+    }
+    const name = window.prompt("Nom du modèle (ex : Faire une commande) :", newTaskContent.slice(0, 40));
+    if (!name) return;
+    const tpl = {
+      id: `tpl_${Date.now()}`,
+      name: name.trim(),
+      content: newTaskContent,
+      competences: newTaskCompetences
+    };
+    saveTemplates([...taskTemplates, tpl]);
+  };
+
+  const deleteTemplate = (id) => {
+    saveTemplates(taskTemplates.filter(t => t.id !== id));
+    if (selectedTemplateId === id) setSelectedTemplateId('');
   };
 
   // 4. ACTIONS CONFIGURATION
@@ -449,6 +509,8 @@ export default function Journal() {
           <div className="legend-item"><div className="legend-dot type-conges"></div> Congés</div>
           <div className="legend-item"><div className="legend-dot type-ferie"></div> Férié</div>
           <div className="legend-item"><div className="legend-dot type-pont"></div> Pont</div>
+          <div className="legend-item"><div className="legend-dot type-maladie"></div> Arrêt maladie</div>
+          <div className="legend-item"><div className="legend-dot type-intemperies"></div> Intempéries</div>
         </div>
       </div>
 
@@ -460,29 +522,41 @@ export default function Journal() {
         </div>
         <div className="calendar-days">
           {calendarCells.map((cell, idx) => {
-            const hasEntry = cell.isCurrentMonth && entries[cell.dateStr]?.tasks?.length > 0;
+            const dayTasks = (cell.isCurrentMonth && entries[cell.dateStr]?.tasks) || [];
+            const hasEntry = dayTasks.length > 0;
+            const isNonWorking = cell.type === 'weekend' || cell.type === 'ferie' || cell.type === 'pont' || cell.type === 'maladie' || cell.type === 'intemperies';
             return (
-              <div 
-                key={idx} 
-                className={`calendar-day ${!cell.isCurrentMonth ? 'other-month' : ''} ${cell.isToday ? 'today' : ''} type-${cell.type} ${(cell.type === 'weekend' || cell.type === 'ferie' || cell.type === 'pont') ? 'non-working' : ''}`}
+              <div
+                key={idx}
+                className={`calendar-day ${!cell.isCurrentMonth ? 'other-month' : ''} ${cell.isToday ? 'today' : ''} type-${cell.type} ${isNonWorking ? 'non-working' : ''}`}
                 onClick={() => openDayModal(cell)}
               >
-                <div className="calendar-day-number">{cell.day}</div>
-                {cell.isCurrentMonth && cell.type !== 'none' && cell.type !== 'weekend' && cell.type !== 'ferie' && cell.type !== 'pont' && (
-                  <div className={`calendar-day-type type-${cell.type}`}>
-                    {cell.type}
-                  </div>
-                )}
-                {cell.isCurrentMonth && cell.type === 'ferie' && (
-                  <div className="calendar-day-type type-ferie">Férié</div>
-                )}
-                {cell.isCurrentMonth && cell.type === 'pont' && (
-                  <div className="calendar-day-type type-pont">Pont</div>
-                )}
-                
+                <div className="calendar-day-header">
+                  <span className="calendar-day-number">{cell.day}</span>
+                  {cell.isCurrentMonth && cell.type !== 'none' && cell.type !== 'weekend' && (
+                    <span className={`calendar-day-type type-${cell.type}`}>
+                      {TYPE_LABELS[cell.type] || cell.type}
+                    </span>
+                  )}
+                </div>
+
                 {hasEntry && (
-                  <div className="calendar-day-tasks has-tasks">
-                    <FileText /> {entries[cell.dateStr].tasks.length} tâche(s)
+                  <div className="calendar-day-tasks">
+                    {dayTasks.slice(0, 2).map((t, i) => {
+                      const ch = chantiers.find(c => c.id === t.chantier_id);
+                      return (
+                        <div key={i} className="day-task-chip" title={`${t.content || ''}${ch ? ' — ' + ch.nom : ''}`}>
+                          <span className="day-task-dot"></span>
+                          <span className="day-task-text">
+                            {ch && <span className="day-task-chantier">{ch.nom} · </span>}
+                            {t.content || 'Tâche'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {dayTasks.length > 2 && (
+                      <div className="day-task-more">+{dayTasks.length - 2} autre{dayTasks.length - 2 > 1 ? 's' : ''}</div>
+                    )}
                   </div>
                 )}
               </div>
@@ -508,6 +582,8 @@ export default function Journal() {
             <option value="ecole">École</option>
             <option value="conges">Congés</option>
             <option value="pont">Pont</option>
+            <option value="maladie">Arrêt maladie</option>
+            <option value="intemperies">Intempéries</option>
           </select>
 
           <label className="task-editor-label">Date de début</label>
@@ -742,8 +818,47 @@ export default function Journal() {
                     </div>
                   </div>
 
+                  <label className="task-editor-label">Modèles de tâches récurrentes</label>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <select
+                      value={selectedTemplateId}
+                      onChange={e => applyTemplate(e.target.value)}
+                      style={{ flex: 1, minWidth: '180px' }}
+                    >
+                      <option value="">-- Appliquer un modèle --</option>
+                      {taskTemplates.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={saveCurrentAsTemplate}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', fontSize: '12px', padding: '8px 12px' }}
+                    >
+                      <Bookmark size={14} /> Enregistrer comme modèle
+                    </button>
+                  </div>
+                  {taskTemplates.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '1rem' }}>
+                      {taskTemplates.map(t => (
+                        <span key={t.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', background: 'var(--bg-stripe)', border: '1px solid var(--border-mid)', borderRadius: '999px', padding: '3px 6px 3px 10px' }}>
+                          {t.name}
+                          <button
+                            type="button"
+                            onClick={() => deleteTemplate(t.id)}
+                            title="Supprimer le modèle"
+                            style={{ display: 'flex', alignItems: 'center', border: 'none', background: 'transparent', cursor: 'pointer', color: '#dc2626', padding: 0 }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
                   <label className="task-editor-label">Description de la tâche</label>
-                  <textarea 
+                  <textarea
                     placeholder="Qu'avez-vous fait aujourd'hui ? Détaillez vos actions..."
                     value={newTaskContent}
                     onChange={e => setNewTaskContent(e.target.value)}

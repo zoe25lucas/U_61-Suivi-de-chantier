@@ -25,3 +25,6 @@ dist-ssr
 
 .vercel
 .env*
+
+# Fichiers internes de l'assistant
+.claude/

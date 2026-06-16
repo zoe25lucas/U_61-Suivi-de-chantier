@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, LayersControl, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 const { BaseLayer } = LayersControl;
@@ -154,6 +155,19 @@ const MapRecentering = ({ center }) => {
   return null;
 };
 
+// Carte d'aperçu : zoom sur un chantier si "focus", sinon cadre tous les points
+const MapController = ({ focus, allCoords }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (focus && focus.coords) {
+      map.flyTo(focus.coords, 17, { duration: 0.8 });
+    } else if (allCoords && allCoords.length > 0) {
+      map.fitBounds(L.latLngBounds(allCoords), { padding: [50, 50] });
+    }
+  }, [focus, allCoords, map]);
+  return null;
+};
+
 // Modern Custom Marker Icon
 const modernIcon = L.divIcon({
   className: 'modern-marker destination',
@@ -170,6 +184,17 @@ const modernIconStart = L.divIcon({
   html: `
     <div class="marker-pin start"></div>
     <div class="marker-pulse start"></div>
+  `,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15]
+});
+
+// Marqueur pour les appels d'offres (couleur distincte)
+const aoIcon = L.divIcon({
+  className: 'modern-marker ao',
+  html: `
+    <div class="marker-pin ao"></div>
+    <div class="marker-pulse ao"></div>
   `,
   iconSize: [30, 30],
   iconAnchor: [15, 15]
@@ -204,6 +229,23 @@ const normalizeString = (str) => {
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 };
 
+const extractCompId = (compStr) => {
+  if (!compStr) return null;
+  const match = compStr.match(/^(C\d+\.\d+|C\d+)/);
+  return match ? match[1] : null;
+};
+
+// Normalise les anciens statuts vers le référentiel actuel
+const normalizeStatus = (s) => {
+  if (s === 'appel_offre') return 'ao_en_cours';
+  if (s === 'en_cours') return 'chantier_en_cours';
+  if (s === 'perdu') return 'ao_perdu';
+  return s || 'ao_en_cours';
+};
+// Un chantier "gagné" = phase chantier_* (avec numéro). Sinon c'est un appel d'offre.
+const isChantierPhase = (c) => normalizeStatus(c?.status).startsWith('chantier_');
+const isAppelOffrePhase = (c) => normalizeStatus(c?.status).startsWith('ao_');
+
 const MapClickHandler = ({ onLocationSelected, isEnabled }) => {
   useMapEvents({
     click: async (e) => {
@@ -233,13 +275,27 @@ const MapClickHandler = ({ onLocationSelected, isEnabled }) => {
 const Chantiers = () => {
   const [chantiers, setChantiers] = useState([]);
   const [selectedChantier, setSelectedChantier] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const chantierIdParam = searchParams.get('id');
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true');
   const [uploadingFiles, setUploadingFiles] = useState({}); // { id: true/false }
   const [chantierTasks, setChantierTasks] = useState([]);
+  const [allTasks, setAllTasks] = useState([]);
+  const [activeTab, setActiveTab] = useState('grid'); // 'grid' or 'summary'
   const [enlargedImage, setEnlargedImage] = useState(null);
   const [isMapExpanded, setIsMapExpanded] = useState(false);
+
+  // Modal de création (chantier vs appel d'offre)
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [newKind, setNewKind] = useState('chantier'); // 'chantier' | 'ao'
+  const [newType, setNewType] = useState('independent'); // 'independent' | 'group' | 'sub'
+  const [newParentId, setNewParentId] = useState('');
+
+  // Carte : afficher aussi les appels d'offres + zoom sur un chantier
+  const [showAoOnMap, setShowAoOnMap] = useState(false);
+  const [mapFocus, setMapFocus] = useState(null); // { id, coords } | null
 
   const [showMainPhotoEditor, setShowMainPhotoEditor] = useState(false);
   const [mainPhotoStyle, setMainPhotoStyle] = useState({ scale: 1, x: 0, y: 0 });
@@ -512,39 +568,11 @@ const Chantiers = () => {
   };
 
   useEffect(() => {
-    async function fetchTasks() {
-      if (!selectedChantier?.id) return;
-      // Filter directly in Supabase for better performance
-      const { data, error } = await supabase
-        .from('journal_entries')
-        .select('*');
-      
-      if (error) console.error("Error fetching journal entries:", error);
-
-      if (data) {
-        const filteredTasks = [];
-        data.forEach(entry => {
-          let tasksArr = entry.tasks;
-          if (typeof tasksArr === 'string') {
-            try { tasksArr = JSON.parse(tasksArr); } catch(e) { tasksArr = []; }
-          }
-          if (!Array.isArray(tasksArr)) tasksArr = [];
-
-          tasksArr.forEach(t => {
-            if (t && String(t.chantier_id || '') === String(selectedChantier.id)) {
-              filteredTasks.push({ ...t, date: entry.date });
-            }
-          });
-        });
-        filteredTasks.sort((a, b) => new Date(b.date) - new Date(a.date));
-        setChantierTasks(filteredTasks);
-      }
-
-
-
-    }
-    fetchTasks();
-  }, [selectedChantier?.id]);
+    if (!selectedChantier?.id) return;
+    const filteredTasks = allTasks.filter(t => t && String(t.chantier_id || '') === String(selectedChantier.id));
+    filteredTasks.sort((a, b) => new Date(b.date) - new Date(a.date));
+    setChantierTasks(filteredTasks);
+  }, [selectedChantier?.id, allTasks]);
 
 
   const groupedTasks = React.useMemo(() => {
@@ -580,23 +608,152 @@ const Chantiers = () => {
     }).sort((a, b) => b.endDate - a.endDate);
   }, [chantierTasks]);
 
-  useEffect(() => {
-    async function fetchChantiers() {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('chantiers')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('Error fetching chantiers:', error);
-      } else {
-        setChantiers(data || []);
+  const realizedCompetencies = React.useMemo(() => {
+    const ids = new Set();
+    chantierTasks.forEach(task => {
+      if (Array.isArray(task.competences)) {
+        task.competences.forEach(comp => {
+          const id = extractCompId(comp);
+          if (id) ids.add(id);
+        });
       }
+    });
+    return Array.from(ids);
+  }, [chantierTasks]);
+
+  const realizedCompsByCategory = React.useMemo(() => {
+    const groups = { C2: [], C15: [], C16: [], C18: [] };
+    realizedCompetencies.forEach(code => {
+      let foundItem = null;
+      let category = null;
+      Object.entries(COMPETENCES_DATA).forEach(([cat, data]) => {
+        const it = data.items.find(i => i.id === code);
+        if (it) {
+          foundItem = it;
+          category = cat;
+        }
+      });
+      if (foundItem) {
+        groups[category].push({ id: code, label: foundItem.label });
+      }
+    });
+    return groups;
+  }, [realizedCompetencies]);
+
+  const summaryMatrix = React.useMemo(() => {
+    const matrix = {};
+    chantiers.forEach(c => {
+      matrix[c.id] = new Set();
+    });
+    allTasks.forEach(task => {
+      if (task.chantier_id && matrix[task.chantier_id]) {
+        if (Array.isArray(task.competences)) {
+          task.competences.forEach(comp => {
+            const id = extractCompId(comp);
+            if (id) {
+              matrix[task.chantier_id].add(id);
+            }
+          });
+        }
+      }
+    });
+    return matrix;
+  }, [chantiers, allTasks]);
+
+  const totalCompetenciesCount = 19;
+
+  // Tableau récap : uniquement les chantiers gagnés (les appels d'offres sont exclus)
+  const summaryChantiers = React.useMemo(() => chantiers.filter(isChantierPhase), [chantiers]);
+
+  // Données de la carte (identité stable tant que les chantiers / filtre AO ne changent pas)
+  const mapData = React.useMemo(() => {
+    const hasCoords = (c) => Array.isArray(c.coordinates) && c.coordinates.length === 2 && Number.isFinite(c.coordinates[0]) && Number.isFinite(c.coordinates[1]);
+    const chantiersMappable = chantiers.filter(c => hasCoords(c) && isChantierPhase(c));
+    const aoMappable = chantiers.filter(c => hasCoords(c) && isAppelOffrePhase(c));
+    const mappable = showAoOnMap ? [...chantiersMappable, ...aoMappable] : chantiersMappable;
+    return { chantiersMappable, aoMappable, mappable, allCoords: mappable.map(c => c.coordinates) };
+  }, [chantiers, showAoOnMap]);
+
+  const averagePercentage = React.useMemo(() => {
+    if (summaryChantiers.length === 0) return 0;
+    const totalCount = summaryChantiers.reduce((acc, c) => acc + (summaryMatrix[c.id]?.size || 0), 0);
+    return Math.round((totalCount / (totalCompetenciesCount * summaryChantiers.length)) * 100);
+  }, [summaryChantiers, summaryMatrix]);
+
+  const uniqueRealizedComps = React.useMemo(() => {
+    const unique = new Set();
+    summaryChantiers.forEach(c => {
+      summaryMatrix[c.id]?.forEach(id => unique.add(id));
+    });
+    return unique;
+  }, [summaryChantiers, summaryMatrix]);
+
+  const globalCoveragePercentage = React.useMemo(() => {
+    return Math.round((uniqueRealizedComps.size / totalCompetenciesCount) * 100);
+  }, [uniqueRealizedComps]);
+
+  useEffect(() => {
+    async function fetchChantiersAndTasks() {
+      setLoading(true);
+
+      try {
+        const { data: chData, error: chError } = await supabase
+          .from('chantiers')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (chError) {
+          console.error('Error fetching chantiers:', chError);
+        } else {
+          setChantiers(chData || []);
+        }
+      } catch (err) {
+        console.error('Exception fetching chantiers:', err);
+      }
+
+      try {
+        const { data: journalData, error: journalError } = await supabase
+          .from('journal_entries')
+          .select('*');
+
+        if (journalError) {
+          console.error("Error fetching journal entries:", journalError);
+        } else if (journalData) {
+          const tasks = [];
+          journalData.forEach(entry => {
+            let tasksArr = entry.tasks;
+            if (typeof tasksArr === 'string') {
+              try { tasksArr = JSON.parse(tasksArr); } catch(e) { tasksArr = []; }
+            }
+            if (!Array.isArray(tasksArr)) tasksArr = [];
+
+            tasksArr.forEach(t => {
+              if (t) {
+                tasks.push({ ...t, date: entry.date });
+              }
+            });
+          });
+          setAllTasks(tasks);
+        }
+      } catch (err) {
+        console.error('Exception fetching journal entries:', err);
+      }
+
       setLoading(false);
     }
-    fetchChantiers();
+    fetchChantiersAndTasks();
   }, []);
+
+  useEffect(() => {
+    if (chantiers.length > 0 && chantierIdParam) {
+      const found = chantiers.find(c => String(c.id) === String(chantierIdParam));
+      if (found) {
+        setSelectedChantier(found);
+        if (found.photo_principale_style) setMainPhotoStyle(found.photo_principale_style);
+        else setMainPhotoStyle({ scale: 1, x: 0, y: 0 });
+      }
+    }
+  }, [chantiers, chantierIdParam]);
 
   const handleUpdateSelected = (field, value) => {
     setSelectedChantier(prev => {
@@ -732,6 +889,7 @@ const Chantiers = () => {
     } else {
       setChantiers(prev => prev.filter(c => c.id !== selectedChantier.id));
       setSelectedChantier(null);
+      setSearchParams({});
     }
   };
 
@@ -740,12 +898,15 @@ const Chantiers = () => {
       if (!window.confirm("Vos modifications non enregistrées seront perdues. Quitter ?")) return;
     }
     setSelectedChantier(null);
+    setSearchParams({});
     window.scrollTo(0, 0);
   };
 
   const handleSave = async () => {
     const payload = {
       status: selectedChantier.status,
+      numero: selectedChantier.numero,
+      parent_id: selectedChantier.parent_id || null,
       nom: selectedChantier.nom,
       lieu: selectedChantier.lieu,
       coordinates: selectedChantier.coordinates,
@@ -785,10 +946,20 @@ const Chantiers = () => {
     }
   };
 
-  const handleAddNew = async () => {
+  const handleAddNew = async ({ kind = 'chantier', type = 'independent', parentId = null } = {}) => {
+    const nomParDefaut = kind === 'ao'
+      ? "Nouvel appel d'offre"
+      : type === 'group'
+        ? 'Nouveau groupe de chantiers'
+        : type === 'sub'
+          ? 'Nouveau sous-chantier'
+          : 'Nouveau chantier';
+
     const newChantier = {
-      status: 'ao_en_cours',
-      nom: 'Nouveau chantier',
+      status: kind === 'ao' ? 'ao_en_cours' : 'chantier_preparation',
+      numero: '',
+      parent_id: kind === 'chantier' && type === 'sub' ? parentId : null,
+      nom: nomParDefaut,
       lieu: '',
       typeProjet: '',
       conducteurTravaux: '',
@@ -818,10 +989,11 @@ const Chantiers = () => {
 
     if (error) {
       console.error('Error creating chantier:', error);
-      alert('Erreur de création de chantier');
+      alert('Erreur de création de chantier : ' + (error.message || 'Erreur inconnue'));
     } else if (data && data.length > 0) {
       setChantiers([data[0], ...chantiers]);
       setSelectedChantier(data[0]);
+      setShowNewModal(false);
       setIsEditing(true); // Open directly in edit mode
       window.scrollTo(0, 0);
     }
@@ -855,12 +1027,16 @@ const Chantiers = () => {
 
   // VIEW RENDERING
   if (selectedChantier) {
-    const { 
-      nom, lieu, coordinates, typeProjet, conducteurTravaux, marche, maitreOeuvre, maitreOuvrage, csps, controleTechnique, 
-      descriptionProjet, illustrations, fichiersJoints, documentsSpecifiques, roleApprenti, 
+    const {
+      numero, parent_id, nom, lieu, coordinates, typeProjet, conducteurTravaux, marche, maitreOeuvre, maitreOuvrage, csps, controleTechnique,
+      descriptionProjet, illustrations, fichiersJoints, documentsSpecifiques, roleApprenti,
       travauxEffectues, competencesMobilisees, datesChantier, photo_principale,
       documentsEtude, etudesGeotechniques, diagnostics, plansDocuments, planifications, securite
     } = selectedChantier;
+
+    // Chantier parent (pour le fil d'Ariane) et chantiers éligibles comme parent
+    const parentChantier = parent_id ? chantiers.find(c => String(c.id) === String(parent_id)) : null;
+    const parentOptions = chantiers.filter(c => c.id !== selectedChantier.id && !c.parent_id);
     
     // Normalize old statuses
     let currentStatus = selectedChantier.status;
@@ -932,10 +1108,52 @@ const Chantiers = () => {
             <div className="chantier-header-split">
               <div className="header-split-left">
                 <div className="detail-header-info" style={{ border: 'none', padding: 0, margin: 0 }}>
+                  {/* Fil d'Ariane vers le chantier parent */}
+                  {parentChantier && (
+                    <div
+                      className="chantier-breadcrumb"
+                      onClick={() => openChantier(parentChantier)}
+                      style={{ cursor: 'pointer', fontSize: '12px', color: 'var(--ink-dim)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <ArrowLeft size={12} /> Fait partie de {parentChantier.numero ? `N° ${parentChantier.numero} — ` : ''}{parentChantier.nom}
+                    </div>
+                  )}
+
+                  {/* Numéro de chantier */}
                   {isEditing ? (
-                    <input 
-                      type="text" className="chantier-title-input" 
-                      value={nom} onChange={(e) => handleUpdateSelected('nom', e.target.value)} 
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-dim)' }}>N° de chantier</label>
+                        <input
+                          type="text"
+                          value={numero || ''}
+                          onChange={(e) => handleUpdateSelected('numero', e.target.value)}
+                          placeholder="ex : BHG2567001 ou 04"
+                          style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--border-mid)', fontSize: '13px', background: 'white' }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '200px' }}>
+                        <label style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-dim)' }}>Rattacher à un chantier parent</label>
+                        <select
+                          value={parent_id || ''}
+                          onChange={(e) => handleUpdateSelected('parent_id', e.target.value || null)}
+                          style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--border-mid)', fontSize: '13px', background: 'white' }}
+                        >
+                          <option value="">Aucun (chantier principal)</option>
+                          {parentOptions.map(p => (
+                            <option key={p.id} value={p.id}>{p.numero ? `N° ${p.numero} — ` : ''}{p.nom}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  ) : (
+                    numero && <span className="chantier-numero-badge group" style={{ marginBottom: '10px' }}>N° {numero}</span>
+                  )}
+
+                  {isEditing ? (
+                    <input
+                      type="text" className="chantier-title-input"
+                      value={nom} onChange={(e) => handleUpdateSelected('nom', e.target.value)}
                       placeholder="Nom du chantier"
                       style={{ width: '100%', fontSize: '32px', fontFamily: 'Playfair Display', fontWeight: 900, border: 'none', background: 'transparent', borderBottom: '1px solid var(--border-mid)' }}
                     />
@@ -1084,6 +1302,63 @@ const Chantiers = () => {
                 )}
               </div>
 
+            </div>
+
+            {/* COMPÉTENCES DU CHANTIER */}
+            <div className="chantier-realized-competences-card" style={{ 
+              marginBottom: '2rem',
+              background: 'var(--bg-card)',
+              padding: '2rem',
+              borderRadius: '28px',
+              border: '1px solid var(--border-mid)'
+            }}>
+              <h3 className="section-card-title" style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Award size={20} /> Compétences mobilisées ({realizedCompetencies.length})
+              </h3>
+              {realizedCompetencies.length > 0 ? (
+                <div className="comps-categories-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
+                  {Object.entries(realizedCompsByCategory).map(([cat, items]) => {
+                    if (items.length === 0) return null;
+                    const catInfo = COMPETENCES_DATA[cat];
+                    return (
+                      <div key={cat} className="comp-cat-box" style={{ 
+                        paddingLeft: '1rem',
+                        background: 'var(--bg-card)',
+                        padding: '1.2rem',
+                        borderRadius: '16px',
+                        border: '1px solid var(--border-mid)',
+                        borderLeftWidth: '5px',
+                        borderLeftColor: catInfo.color
+                      }}>
+                        <h4 className="comp-cat-title" style={{ color: 'var(--ink)', fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '6px' }}>{catInfo.title}</h4>
+                        <div className="comp-items-tags" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {items.map(it => (
+                            <div key={it.id} className="comp-tag-pill" style={{ 
+                              fontSize: '11px',
+                              lineHeight: '1.4',
+                              color: 'var(--ink-mid)',
+                              padding: '8px 12px',
+                              borderRadius: '8px',
+                              background: `${catInfo.color}15`,
+                              border: `1px solid ${catInfo.color}40`,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '2px'
+                            }}>
+                              <strong style={{ color: 'var(--ink)', fontSize: '10px' }}>{it.id}</strong>
+                              <span>{it.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="empty-state-text" style={{ fontSize: '13px', color: 'var(--ink-muted)', fontStyle: 'italic', background: 'var(--bg-card)', padding: '1.5rem', borderRadius: '16px', border: '1px dashed var(--border-mid)', textAlign: 'center' }}>
+                  Aucune compétence n'a encore été enregistrée pour ce chantier dans le journal de bord.
+                </div>
+              )}
             </div>
 
             <div style={{ height: '1px', background: 'var(--border-mid)', margin: '2rem 0' }}></div>
@@ -1306,49 +1581,7 @@ const Chantiers = () => {
                     </div>
                   )}
 
-                  {(competencesMobilisees && competencesMobilisees.length > 0) && (
-                    <div className="premium-card">
-                      <h3 className="premium-card-title"><Award size={20} /> Compétences Métier</h3>
-                      <div className="comp-list">
-                        {isEditing ? (
-                          <div className="competence-selector-premium" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', maxHeight: '300px', overflowY: 'auto', padding: '10px', background: 'var(--bg-stripe)', borderRadius: '12px' }}>
-                            {Object.entries(COMPETENCES_DATA).map(([groupKey, group]) => (
-                              <div key={groupKey} style={{ gridColumn: '1 / -1' }}>
-                                <h5 style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--ink-dim)', marginBottom: '8px', borderBottom: '1px solid var(--border-mid)', paddingBottom: '4px' }}>{group.title}</h5>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                  {group.items.map(it => (
-                                    <label key={it.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '11px', cursor: 'pointer', padding: '4px' }}>
-                                      <input 
-                                        type="checkbox" 
-                                        checked={competencesMobilisees.includes(it.id)}
-                                        onChange={() => toggleCompetence(it.id)}
-                                      />
-                                      <span>{it.id} - {it.label}</span>
-                                    </label>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          competencesMobilisees.map((code, i) => {
-                            let label = code;
-                            Object.values(COMPETENCES_DATA).forEach(group => {
-                              const item = group.items.find(it => it.id === code);
-                              if (item) label = `${code} - ${item.label}`;
-                            });
-                            const catClass = code.startsWith('C16') ? 'c16' : code.startsWith('C18') ? 'c18' : '';
-                            return (
-                              <div key={i} className={`comp-item-row ${catClass}`}>
-                                <span style={{ fontSize: '13px', lineHeight: '1.4' }}>{label}</span>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
 
-                    </div>
-                  )}
                 </div>
 
                 {/* GALERIE (COLONNE DROITE) */}
@@ -1675,77 +1908,555 @@ const Chantiers = () => {
   }
 
   // LIST VIEW
+  // Carte individuelle d'un chantier (réutilisée pour racine et sous-chantiers)
+  const renderChantierCard = (chantier, isSub = false) => {
+    let s = chantier.status;
+    if (s === 'appel_offre') s = 'ao_en_cours';
+    if (s === 'perdu') s = 'ao_perdu';
+    if (s === 'en_cours') s = 'chantier_en_cours';
+
+    let statusLabel = s;
+    switch (s) {
+      case 'ao_en_cours': statusLabel = "Appel d'offre - En cours"; break;
+      case 'ao_gagne': statusLabel = "Appel d'offre - Gagné"; break;
+      case 'ao_perdu': statusLabel = "Appel d'offre - Perdu"; break;
+      case 'chantier_preparation': statusLabel = "Chantier - Préparation"; break;
+      case 'chantier_en_cours': statusLabel = "Chantier - En cours"; break;
+      case 'chantier_termine': statusLabel = "Chantier - Terminé"; break;
+    }
+
+    return (
+      <div key={chantier.id} className={`chantier-card ${isSub ? 'is-sub' : ''}`} onClick={() => openChantier(chantier)}>
+        <div className="chantier-card-image">
+          {chantier.photo_principale ? (
+            <img src={chantier.photo_principale} alt={chantier.nom} />
+          ) : (
+            <div className="no-photo-placeholder">
+              <Building2 size={40} style={{ opacity: 0.1 }} />
+            </div>
+          )}
+        </div>
+        <div className="chantier-card-content">
+          <div className="chantier-card-header">
+            <span className={`status-badge ${s}`}>
+              {statusLabel}
+            </span>
+            {chantier.numero ? (
+              <span className="chantier-numero-badge">N° {chantier.numero}</span>
+            ) : (
+              <Building2 className="chantier-icon" size={20} style={{ opacity: 0.3 }} />
+            )}
+          </div>
+          <h3 className="chantier-card-title">{chantier.nom}</h3>
+          <div className="chantier-card-location"><MapPin size={14} /> <span>{chantier.lieu?.split('(')[0] || 'Lieu non renseigné'}</span></div>
+          <div className="chantier-card-footer">
+            <span className="chantier-type">{chantier.typeProjet || 'Type non défini'}</span>
+            <span className="view-details">Voir les détails &rarr;</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Index parent -> enfants, et liste des éléments racine (sans parent)
+  const childrenByParent = {};
+  chantiers.forEach(c => {
+    if (c.parent_id) {
+      (childrenByParent[c.parent_id] = childrenByParent[c.parent_id] || []).push(c);
+    }
+  });
+  const rootChantiers = chantiers.filter(c => !c.parent_id);
+
+  // Séparation Chantiers (gagnés, avec numéro) / Appels d'offres (sans numéro)
+  const rootChantierItems = rootChantiers.filter(isChantierPhase);
+  const appelsOffres = chantiers.filter(c => !c.parent_id && isAppelOffrePhase(c));
+  const aoEnCours = appelsOffres.filter(c => normalizeStatus(c.status) === 'ao_en_cours');
+  const aoGagnes = appelsOffres.filter(c => normalizeStatus(c.status) === 'ao_gagne');
+  const aoPerdus = appelsOffres.filter(c => normalizeStatus(c.status) === 'ao_perdu');
+
   return (
     <>
       <div className="page content chantiers-list-page">
         <div className="chantiers-container">
           <div className="chantiers-header-top">
+            {isAdmin && (
+              <button
+                className="btn-primary chantiers-new-btn"
+                onClick={() => { setNewKind('chantier'); setNewType('independent'); setNewParentId(''); setShowNewModal(true); }}
+              >
+                <Plus size={16} /> Nouveau
+              </button>
+            )}
             <h1>Mes Chantiers</h1>
             <p>Liste des projets, appels d'offres et suivis de chantiers.</p>
+
+            <div className="chantiers-tabs" style={{ display: 'flex', gap: '10px', marginTop: '1.5rem' }}>
+              <button 
+                className={`tab-btn-premium ${activeTab === 'summary' ? 'active' : ''}`}
+                onClick={() => setActiveTab('summary')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '20px',
+                  border: '1px solid var(--border-mid)',
+                  background: activeTab === 'summary' ? 'var(--ink)' : 'transparent',
+                  color: activeTab === 'summary' ? 'white' : 'var(--ink-dim)',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Tableau Récapitulatif
+              </button>
+              <button 
+                className={`tab-btn-premium ${activeTab === 'grid' ? 'active' : ''}`}
+                onClick={() => setActiveTab('grid')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '20px',
+                  border: '1px solid var(--border-mid)',
+                  background: activeTab === 'grid' ? 'var(--ink)' : 'transparent',
+                  color: activeTab === 'grid' ? 'white' : 'var(--ink-dim)',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Grille des Chantiers
+              </button>
+              <button
+                className={`tab-btn-premium ${activeTab === 'map' ? 'active' : ''}`}
+                onClick={() => setActiveTab('map')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '20px',
+                  border: '1px solid var(--border-mid)',
+                  background: activeTab === 'map' ? 'var(--ink)' : 'transparent',
+                  color: activeTab === 'map' ? 'white' : 'var(--ink-dim)',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Carte
+              </button>
+            </div>
           </div>
 
       {loading ? (
         <div className="loading-state">Chargement des chantiers...</div>
-      ) : (
-        <div className="chantiers-grid-list">
-          {chantiers.map(chantier => {
-            let s = chantier.status;
-            if (s === 'appel_offre') s = 'ao_en_cours';
-            if (s === 'perdu') s = 'ao_perdu';
-            if (s === 'en_cours') s = 'chantier_en_cours';
-
-            let statusLabel = s;
-            switch(s) {
-              case 'ao_en_cours': statusLabel = "Appel d'offre - En cours"; break;
-              case 'ao_gagne': statusLabel = "Appel d'offre - Gagné"; break;
-              case 'ao_perdu': statusLabel = "Appel d'offre - Perdu"; break;
-              case 'chantier_preparation': statusLabel = "Chantier - Préparation"; break;
-              case 'chantier_en_cours': statusLabel = "Chantier - En cours"; break;
-              case 'chantier_termine': statusLabel = "Chantier - Terminé"; break;
-            }
-
-            return (
-              <div key={chantier.id} className="chantier-card" onClick={() => openChantier(chantier)}>
-                <div className="chantier-card-image">
-                  {chantier.photo_principale ? (
-                    <img src={chantier.photo_principale} alt={chantier.nom} />
-                  ) : (
-                    <div className="no-photo-placeholder">
-                      <Building2 size={40} style={{ opacity: 0.1 }} />
+      ) : activeTab === 'summary' ? (
+        <div className="chantiers-summary-table-container" style={{ overflowX: 'auto', background: 'var(--bg-card)', borderRadius: '28px', border: '1px solid var(--border-mid)', padding: '2rem', marginTop: '2rem' }}>
+          <table className="summary-matrix-table" style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px', marginBottom: '2rem' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: '12px', borderBottom: '2px solid var(--border-mid)', verticalAlign: 'bottom', fontSize: '14px', fontFamily: 'Playfair Display' }}>
+                  Compétences
+                </th>
+                {summaryChantiers.map(c => (
+                  <th
+                    key={c.id}
+                    className="rotated-header-cell"
+                    style={{ borderBottom: '2px solid var(--border-mid)', textAlign: 'center', width: '60px', cursor: 'pointer' }}
+                    onClick={() => openChantier(c)}
+                  >
+                    <div className="rotated-header-content" style={{ color: 'var(--accent-cord)', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+                      {c.numero ? `N° ${c.numero} — ${c.nom}` : c.nom}
                     </div>
-                  )}
-                </div>
-                <div className="chantier-card-content">
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(COMPETENCES_DATA).map(([catKey, cat]) => {
+                return (
+                  <React.Fragment key={catKey}>
+                    <tr style={{ backgroundColor: `${cat.color}25` }}>
+                      <td 
+                        colSpan={summaryChantiers.length + 1}
+                        style={{ 
+                          padding: '10px 12px', 
+                          fontWeight: 800, 
+                          fontSize: '11px', 
+                          textTransform: 'uppercase', 
+                          letterSpacing: '0.05em', 
+                          color: 'var(--ink)',
+                          borderBottom: '1px solid var(--border-mid)'
+                        }}
+                      >
+                        {catKey} — {cat.title}
+                      </td>
+                    </tr>
+                    {cat.items.map(it => (
+                      <tr key={it.id} className="summary-matrix-row">
+                        <td style={{ padding: '10px 12px', fontSize: '12px', borderBottom: '1px solid var(--border)', color: 'var(--ink-mid)' }}>
+                          <strong style={{ color: 'var(--ink)', marginRight: '6px' }}>{it.id}</strong> {it.label}
+                        </td>
+                        {summaryChantiers.map(c => {
+                          const isChecked = summaryMatrix[c.id]?.has(it.id);
+                          return (
+                            <td key={c.id} style={{ borderBottom: '1px solid var(--border)', textAlign: 'center', padding: '6px' }}>
+                              {isChecked ? (
+                                <div style={{ 
+                                  width: '24px', 
+                                  height: '24px', 
+                                  lineHeight: '24px', 
+                                  margin: '0 auto', 
+                                  backgroundColor: cat.color, 
+                                  color: '#000', 
+                                  fontWeight: 900, 
+                                  borderRadius: '6px', 
+                                  fontSize: '12px',
+                                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                }}>
+                                  x
+                                </div>
+                              ) : (
+                                <span style={{ color: 'var(--border-str)', fontSize: '14px', opacity: 0.3 }}>-</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+              
+              <tr style={{ borderTop: '2px solid var(--border-mid)' }}>
+                <td style={{ padding: '12px', fontSize: '12px', fontWeight: 700, color: 'var(--ink)' }}>
+                  Compétences CORRECT
+                </td>
+                {summaryChantiers.map(c => {
+                  const hasLogged = (summaryMatrix[c.id]?.size || 0) > 0;
+                  return (
+                    <td key={c.id} style={{ textAlign: 'center', padding: '6px' }}>
+                      {hasLogged ? (
+                        <div style={{ 
+                          display: 'inline-block',
+                          padding: '4px 8px', 
+                          backgroundColor: '#d5f5e3', 
+                          color: '#196f3d', 
+                          fontWeight: 800, 
+                          borderRadius: '6px', 
+                          fontSize: '9px',
+                          textTransform: 'uppercase'
+                        }}>
+                          CORRECT
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--ink-muted)', fontSize: '10px' }}>EN COURS</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+              
+              <tr>
+                <td style={{ padding: '12px', fontSize: '12px', fontWeight: 700, color: 'var(--ink)' }}>
+                  % évalué
+                </td>
+                {summaryChantiers.map(c => {
+                  const count = summaryMatrix[c.id]?.size || 0;
+                  const percentage = Math.round((count / totalCompetenciesCount) * 100);
+                  return (
+                    <td key={c.id} style={{ textAlign: 'center', padding: '6px' }}>
+                      <div style={{ 
+                        display: 'inline-block',
+                        padding: '4px 8px', 
+                        backgroundColor: percentage > 50 ? '#d5f5e3' : percentage > 10 ? '#fcf3cf' : '#fadbd8', 
+                        color: percentage > 50 ? '#196f3d' : percentage > 10 ? '#7d6608' : '#78281f', 
+                        fontWeight: 900, 
+                        borderRadius: '6px', 
+                        fontSize: '11px'
+                      }}>
+                        {percentage}%
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            </tbody>
+          </table>
 
-                  <div className="chantier-card-header">
-                    <span className={`status-badge ${s}`}>
-                      {statusLabel}
-                    </span>
-                    <Building2 className="chantier-icon" size={20} style={{ opacity: 0.3 }} />
+          <div style={{ display: 'flex', gap: '1.5rem', marginTop: '2rem', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '220px', background: 'linear-gradient(135deg, #f9f7f5 0%, #f0edea 100%)', padding: '1.25rem', borderRadius: '16px', border: '1px solid var(--border-mid)' }}>
+              <span style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--ink-dim)', letterSpacing: '0.05em' }}>Taux moyen par chantier</span>
+              <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--ink)', marginTop: '4px' }}>
+                {averagePercentage}%
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: '220px', background: 'linear-gradient(135deg, #f9f7f5 0%, #f0edea 100%)', padding: '1.25rem', borderRadius: '16px', border: '1px solid var(--border-mid)' }}>
+              <span style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--ink-dim)', letterSpacing: '0.05em' }}>Couverture globale du portefeuille</span>
+              <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--ink)', marginTop: '4px' }}>
+                {globalCoveragePercentage}% <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--ink-muted)' }}>({uniqueRealizedComps.size} / 19 compétences validées)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'map' ? (
+        (() => {
+          const { chantiersMappable, aoMappable, mappable, allCoords } = mapData;
+          const defaultCenter = [48.5, 7.4]; // Alsace / Grand Est
+          const focusOn = (c) => setMapFocus({ id: c.id, coords: c.coordinates });
+          return (
+            <div style={{ marginTop: '2rem' }}>
+              <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', color: 'var(--ink-dim)', fontSize: '13px' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <MapPin size={16} /> {chantiersMappable.length} chantier{chantiersMappable.length > 1 ? 's' : ''} localisé{chantiersMappable.length > 1 ? 's' : ''}
+                </span>
+                {aoMappable.length > 0 && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={showAoOnMap} onChange={(e) => { setShowAoOnMap(e.target.checked); setMapFocus(null); }} />
+                    Afficher aussi les appels d'offres ({aoMappable.length})
+                  </label>
+                )}
+              </div>
+
+              <div className="map-tab-layout">
+                {/* SOMMAIRE cliquable */}
+                <div className="map-sommaire">
+                  <div className="map-sommaire-header">
+                    <span>Sommaire</span>
+                    {mapFocus && (
+                      <button className="map-sommaire-reset" onClick={() => setMapFocus(null)} title="Vue d'ensemble">
+                        <X size={12} /> Vue d'ensemble
+                      </button>
+                    )}
                   </div>
-                  <h3 className="chantier-card-title">{chantier.nom}</h3>
-                  <div className="chantier-card-location"><MapPin size={14} /> <span>{chantier.lieu?.split('(')[0] || 'Lieu non renseigné'}</span></div>
-                  <div className="chantier-card-footer">
-                    <span className="chantier-type">{chantier.typeProjet || 'Type non défini'}</span>
-                    <span className="view-details">Voir les détails &rarr;</span>
+                  <div className="map-sommaire-list">
+                    {mappable.map(c => {
+                      const ao = isAppelOffrePhase(c);
+                      return (
+                        <button
+                          key={c.id}
+                          className={`map-sommaire-item ${mapFocus?.id === c.id ? 'active' : ''}`}
+                          onClick={() => focusOn(c)}
+                        >
+                          <span className={`map-sommaire-dot ${ao ? 'ao' : ''}`}></span>
+                          <span className="map-sommaire-text">{c.nom}</span>
+                        </button>
+                      );
+                    })}
+                    {mappable.length === 0 && (
+                      <div style={{ fontSize: '12px', color: 'var(--ink-muted)', padding: '8px' }}>Aucun chantier localisé.</div>
+                    )}
                   </div>
+                </div>
+
+                {/* CARTE */}
+                <div className="map-tab-map">
+                  <MapContainer center={allCoords[0] || defaultCenter} zoom={9} scrollWheelZoom={true} style={{ height: '100%', width: '100%', zIndex: 1 }}>
+                    <MapZoomHandler />
+                    <MapController focus={mapFocus} allCoords={allCoords} />
+                    <LayersControl position="topright">
+                      <BaseLayer checked name="Vue Satellite">
+                        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+                      </BaseLayer>
+                      <BaseLayer name="Plan">
+                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{y}/{x}.png" />
+                      </BaseLayer>
+                    </LayersControl>
+
+                    {mappable.map(c => {
+                      const ao = isAppelOffrePhase(c);
+                      return (
+                      <Marker
+                        key={c.id}
+                        position={c.coordinates}
+                        icon={ao ? aoIcon : modernIcon}
+                        eventHandlers={{
+                          click: () => focusOn(c),
+                          popupclose: () => setMapFocus(null),
+                        }}
+                      >
+                        <Popup className="premium-popup">
+                          <div className="premium-popup-header">
+                            {ao ? (
+                              <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', color: '#b45309', marginBottom: '2px' }}>Appel d'offre</div>
+                            ) : (
+                              c.numero && <div style={{ fontFamily: "'Courier New', monospace", fontSize: '10px', fontWeight: 800, color: 'var(--accent-cord)', marginBottom: '2px' }}>N° {c.numero}</div>
+                            )}
+                            <strong style={{ fontSize: '14px', fontFamily: 'Playfair Display', color: 'var(--ink)' }}>{c.nom}</strong>
+                          </div>
+                          <div className="premium-popup-body">
+                            <div style={{ fontSize: '11px', color: 'var(--ink-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                              <MapPin size={12} color="var(--vivid-blue)" /> {c.lieu?.split('(')[0] || 'Lieu non renseigné'}
+                            </div>
+                            <button className="btn-primary" style={{ fontSize: '11px', padding: '6px 12px', width: '100%' }} onClick={() => openChantier(c)}>
+                              Voir {ao ? "l'appel d'offre" : 'le chantier'} &rarr;
+                            </button>
+                          </div>
+                        </Popup>
+                      </Marker>
+                      );
+                    })}
+                  </MapContainer>
                 </div>
               </div>
-            );
-          })}
-
-          {/* Placeholder for adding new */}
-          {isAdmin && (
-            <div className="chantier-card add-new-card" onClick={handleAddNew}>
-              <div className="add-new-icon">+</div>
-              <h3>Nouveau chantier</h3>
             </div>
+          );
+        })()
+      ) : (
+        <>
+          {/* SECTION CHANTIERS (gagnés, avec numéro) */}
+          <div className="chantiers-section-title">
+            <h2>Chantiers</h2>
+            <span className="chantiers-section-count">{rootChantierItems.length}</span>
+          </div>
+          <div className="chantiers-grid-list">
+            {rootChantierItems.map(chantier => {
+              const enfants = (childrenByParent[chantier.id] || [])
+                .slice()
+                .sort((a, b) => String(a.numero || '').localeCompare(String(b.numero || ''), 'fr', { numeric: true }));
+
+              // Chantier parent avec sous-chantiers => bloc groupe
+              if (enfants.length > 0) {
+                return (
+                  <div key={chantier.id} className="chantier-group">
+                    <div className="chantier-group-header" onClick={() => openChantier(chantier)}>
+                      <div className="chantier-group-header-left">
+                        {chantier.numero && <span className="chantier-numero-badge group">N° {chantier.numero}</span>}
+                        <h2 className="chantier-group-title">{chantier.nom}</h2>
+                      </div>
+                      <span className="chantier-group-count">{enfants.length} sous-chantier{enfants.length > 1 ? 's' : ''} &rarr;</span>
+                    </div>
+                    <div className="chantier-group-children">
+                      {enfants.map(sub => renderChantierCard(sub, true))}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Chantier standalone => carte simple
+              return renderChantierCard(chantier);
+            })}
+          </div>
+
+          {/* SECTION APPELS D'OFFRES (sans numéro) */}
+          {appelsOffres.length > 0 && (
+            <>
+              <div className="chantiers-section-title ao">
+                <h2>Appels d'offres</h2>
+                <span className="chantiers-section-count">{appelsOffres.length}</span>
+              </div>
+
+              {aoEnCours.length > 0 && (
+                <>
+                  <h3 className="ao-subtitle ao-encours">En cours</h3>
+                  <div className="chantiers-grid-list">{aoEnCours.map(c => renderChantierCard(c))}</div>
+                </>
+              )}
+              {aoGagnes.length > 0 && (
+                <>
+                  <h3 className="ao-subtitle ao-gagne">Gagnés (à convertir en chantier)</h3>
+                  <div className="chantiers-grid-list">{aoGagnes.map(c => renderChantierCard(c))}</div>
+                </>
+              )}
+              {aoPerdus.length > 0 && (
+                <>
+                  <h3 className="ao-subtitle ao-perdu">Perdus</h3>
+                  <div className="chantiers-grid-list">{aoPerdus.map(c => renderChantierCard(c))}</div>
+                </>
+              )}
+            </>
           )}
-        </div>
+        </>
       )}
 
         </div>
       </div>
+
+      {/* MODAL DE CRÉATION */}
+      {showNewModal && (
+        <div className="new-chantier-overlay" onClick={() => setShowNewModal(false)}>
+          <div className="new-chantier-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="new-chantier-modal-header">
+              <h2>Créer</h2>
+              <button className="btn-ghost" onClick={() => setShowNewModal(false)} style={{ padding: '6px' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Étape 1 : nature */}
+            <p style={{ fontSize: '13px', color: 'var(--ink-dim)', marginBottom: '0.75rem' }}>
+              De quoi s'agit-il ?
+            </p>
+            <div className="new-chantier-types" style={{ flexDirection: 'row', gap: '0.75rem' }}>
+              {[
+                { key: 'chantier', titre: 'Chantier', desc: 'Projet gagné, avec un numéro.' },
+                { key: 'ao', titre: "Appel d'offre", desc: 'Candidature en cours, sans numéro.' },
+              ].map(opt => (
+                <button
+                  key={opt.key}
+                  className={`new-chantier-type-card ${newKind === opt.key ? 'active' : ''}`}
+                  style={{ flex: 1 }}
+                  onClick={() => setNewKind(opt.key)}
+                >
+                  <span className="new-chantier-type-title">{opt.titre}</span>
+                  <span className="new-chantier-type-desc">{opt.desc}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Étape 2 : si chantier, choix du type */}
+            {newKind === 'chantier' && (
+              <>
+                <p style={{ fontSize: '13px', color: 'var(--ink-dim)', margin: '1.25rem 0 0.75rem' }}>
+                  Quel type de chantier ?
+                </p>
+                <div className="new-chantier-types">
+                  {[
+                    { key: 'independent', titre: 'Chantier indépendant', desc: 'Un chantier seul, sans regroupement.' },
+                    { key: 'group', titre: 'Groupe de chantiers', desc: 'Un grand chantier qui contiendra plusieurs sous-chantiers.' },
+                    { key: 'sub', titre: 'Sous-chantier', desc: 'Rattaché à un groupe de chantiers existant.' },
+                  ].map(opt => (
+                    <button
+                      key={opt.key}
+                      className={`new-chantier-type-card ${newType === opt.key ? 'active' : ''}`}
+                      onClick={() => setNewType(opt.key)}
+                    >
+                      <span className="new-chantier-type-title">{opt.titre}</span>
+                      <span className="new-chantier-type-desc">{opt.desc}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {newType === 'sub' && (
+                  <div style={{ marginTop: '1.25rem' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-dim)', display: 'block', marginBottom: '6px' }}>
+                      Groupe parent
+                    </label>
+                    <select
+                      value={newParentId}
+                      onChange={(e) => setNewParentId(e.target.value)}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border-mid)', fontSize: '13px', background: 'white' }}
+                    >
+                      <option value="">-- Sélectionner un groupe --</option>
+                      {chantiers.filter(c => !c.parent_id && isChantierPhase(c)).map(p => (
+                        <option key={p.id} value={p.id}>{p.numero ? `N° ${p.numero} — ` : ''}{p.nom}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="new-chantier-modal-footer">
+              <button className="btn-ghost" onClick={() => setShowNewModal(false)}>Annuler</button>
+              <button
+                className="btn-primary"
+                disabled={newKind === 'chantier' && newType === 'sub' && !newParentId}
+                onClick={() => handleAddNew({ kind: newKind, type: newType, parentId: newParentId || null })}
+              >
+                <Plus size={16} /> Créer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

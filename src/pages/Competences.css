@@ -179,7 +179,7 @@
 }
 
 .chart-card h3 {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Playfair Display', serif;
   font-size: 16px;
   font-weight: 700;
   color: var(--ink);
@@ -192,4 +192,65 @@
 .chart-wrapper {
   position: relative;
   width: 100%;
+}
+
+.clickable-comp {
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.clickable-comp:hover {
+  background-color: var(--border-mid) !important;
+  color: var(--ink) !important;
+}
+
+.clickable-comp-legend {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.clickable-comp-legend:hover {
+  transform: translateX(4px);
+  opacity: 0.9 !important;
+}
+
+/* Rotated vertical headers in Competencies relationship matrix */
+.rotated-th {
+  height: 160px;
+  white-space: nowrap;
+  vertical-align: bottom;
+  padding: 10px 5px;
+  border-bottom: 2px solid var(--border-mid);
+}
+
+.rotated-th-content {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--ink);
+  margin: 0 auto;
+  width: 30px;
+  transition: color 0.2s ease;
+}
+
+.rotated-th:hover .rotated-th-content {
+  color: var(--accent-cord) !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.relation-matrix-table th, .relation-matrix-table td {
+  border: 1px solid var(--border-mid);
+}
+
+.relation-matrix-table tr:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+/* Sub-page view styling for relations */
+.relation-details-view {
+  background: var(--bg-page);
+  min-height: 100vh;
 }
