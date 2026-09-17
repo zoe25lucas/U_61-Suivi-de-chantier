@@ -691,7 +691,7 @@ const Themes = () => {
                           {uploadingVideoSectionId === sec.id ? "Téléversement..." : "Téléverser"}
                           <input
                             type="file"
-                            accept="video/*"
+                            accept="video/*,application/pdf"
                             onChange={(e) => handleSectionVideoUpload(e, sec.id)}
                             disabled={uploadingVideoSectionId !== null}
                             style={{ display: 'none' }}
@@ -787,9 +787,17 @@ const Themes = () => {
                       <div key={sec.id} className="dossier-section-container">
                         
                         {/* Section Heading */}
-                        <h2 className="dossier-section-heading">
-                          {sec.title}
-                        </h2>
+                        <h2 className="dossier-section-heading" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+    <span style={{ 
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', 
+      width: '28px', height: '28px', borderRadius: '50%', 
+      background: 'var(--accent-cord)', color: 'white', 
+      fontSize: '14px', fontWeight: 'bold', flexShrink: 0
+    }}>
+      {idx + 1}
+    </span>
+    {sec.title}
+  </h2>
 
                         {/* Section Video (si présente) */}
                         {sec.video && (
@@ -803,7 +811,7 @@ const Themes = () => {
                           // Layout 0: Text Only
                           <div className="section-layout-text-only">
                             {sec.text.split('\n').map((para, pIdx) => (
-                              <p key={pIdx} className="dossier-paragraph">{para}</p>
+                              <p key={pIdx} className="dossier-paragraph" style={{ marginLeft: "40px" }}>{para}</p>
                             ))}
                           </div>
                         ) : imgs.length === 1 ? (
@@ -811,7 +819,7 @@ const Themes = () => {
                           <div className="section-layout-split">
                             <div className="split-text-col">
                               {sec.text.split('\n').map((para, pIdx) => (
-                                <p key={pIdx} className="dossier-paragraph">{para}</p>
+                                <p key={pIdx} className="dossier-paragraph" style={{ marginLeft: "40px" }}>{para}</p>
                               ))}
                             </div>
                             <div className="split-image-col">
@@ -828,7 +836,7 @@ const Themes = () => {
                           <div className="section-layout-grid-stacked">
                             <div className="stacked-text-block">
                               {sec.text.split('\n').map((para, pIdx) => (
-                                <p key={pIdx} className="dossier-paragraph">{para}</p>
+                                <p key={pIdx} className="dossier-paragraph" style={{ marginLeft: "40px" }}>{para}</p>
                               ))}
                             </div>
                             <div className="stacked-images-grid" style={{
