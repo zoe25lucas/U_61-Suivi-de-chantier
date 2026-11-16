@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, User, GraduationCap, Briefcase, BookOpen, Building2, Star, Printer, Settings, FolderOpen } from 'lucide-react';
+import { Home, User, GraduationCap, Briefcase, BookOpen, Building2, Star, Printer, Settings, FolderOpen, ScrollText } from 'lucide-react';
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
@@ -43,6 +43,7 @@ const Navbar = () => {
   };
   const navItems = [
     { to: '/', icon: Home, label: 'Accueil' },
+    { to: '/avant-propos', icon: ScrollText, label: 'Avant-propos' },
     { to: '/profil', icon: User, label: 'Mon profil' },
     { to: '/formation', icon: GraduationCap, label: 'Formation' },
     { to: '/entreprise', icon: Briefcase, label: 'Entreprise' },

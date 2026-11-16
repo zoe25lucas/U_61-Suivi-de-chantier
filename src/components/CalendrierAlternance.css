@@ -1,0 +1,36 @@
+.cal-alternance { display: flex; flex-direction: column; gap: 1.5rem; }
+.cal-annee-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+.cal-annee-head h4 { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; color: #2C2318; margin: 0; }
+.cal-stats { font-size: 12px; color: #5C4E3A; }
+.cal-stats b { color: #2C2318; }
+
+.cal-mois-grille { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+@media (max-width: 900px) { .cal-mois-grille { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 600px) { .cal-mois-grille { grid-template-columns: repeat(2, 1fr); } }
+
+.cal-mois { background: #fff; border: 1px solid rgba(44,35,24,0.10); border-radius: 12px; padding: 8px 8px 10px; }
+.cal-mois-titre { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #8B6E4E; margin-bottom: 6px; text-align: center; }
+.cal-grille { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-entete { font-size: 9px; font-weight: 700; color: #9A8A72; text-align: center; }
+.cal-jour { font-size: 9.5px; text-align: center; line-height: 17px; border-radius: 4px; color: #2C2318; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.cal-jour.vide { background: transparent; }
+
+.t-entreprise { background: #f59e0b; color: #fff; }
+.t-ecole { background: #3b82f6; color: #fff; }
+.t-conges { background: #10b981; color: #fff; }
+.t-ferie { background: #ef4444; color: #fff; }
+.t-weekend { background: transparent; color: #C4B89E; }
+.t-none { background: #f3eee6; color: #9A8A72; }
+
+.cal-legende { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11px; color: #5C4E3A; }
+.cal-legende-item { display: inline-flex; align-items: center; gap: 6px; }
+.cal-pastille { width: 12px; height: 12px; border-radius: 3px; display: inline-block; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+/* Version impression : 2 années sur une page A4 */
+.cal-alternance.compact { gap: 0.9rem; }
+.cal-alternance.compact .cal-mois-grille { grid-template-columns: repeat(6, 1fr); gap: 7px; }
+.cal-alternance.compact .cal-mois { padding: 5px 4px 6px; border-radius: 8px; }
+.cal-alternance.compact .cal-mois-titre { font-size: 8.5px; margin-bottom: 3px; }
+.cal-alternance.compact .cal-entete { font-size: 7px; }
+.cal-alternance.compact .cal-jour { font-size: 7.5px; line-height: 13px; border-radius: 3px; }
+.cal-alternance.compact .cal-annee-head h4 { font-size: 14px; }

@@ -3,6 +3,7 @@ import {
   ChevronLeft, ChevronRight, Plus, Trash2, Calendar, Settings, FileText, CheckCircle, Briefcase, GraduationCap, Tent, MapPin, Edit2, ChevronDown, Save, Bookmark
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getFeries, getPaques } from '../lib/calendar';
 import './Journal.css';
 
 // ---- CONFIGURATION DES COMPÉTENCES ----
@@ -70,17 +71,7 @@ const getFirstDayOfMonth = (year, month) => {
   return day === 0 ? 6 : day - 1; // 0 = Lundi, 6 = Dimanche
 };
 
-// Jours fériés fixes (FR)
-const getFeries = (year) => [
-  `${year}-01-01`, `${year}-05-01`, `${year}-05-08`, `${year}-07-14`, `${year}-08-15`, `${year}-11-01`, `${year}-11-11`, `${year}-12-25`
-];
-// Jours fériés mobiles (approximatif pour 2025/2026)
-const getPaques = (year) => {
-  if (year === 2025) return { lundi: '2025-04-21', ascension: '2025-05-29', pentecote: '2025-06-09' };
-  if (year === 2026) return { lundi: '2026-04-06', ascension: '2026-05-14', pentecote: '2026-05-25' };
-  return { lundi: '', ascension: '', pentecote: '' };
-};
-
+// Jours fériés (France + Alsace-Moselle) : voir src/lib/calendar.js
 const isDateInPeriod = (dateStr, startStr, endStr) => {
   const d = new Date(dateStr).getTime();
   const s = new Date(startStr).getTime();

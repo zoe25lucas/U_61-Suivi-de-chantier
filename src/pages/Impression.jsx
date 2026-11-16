@@ -6,6 +6,9 @@ import {
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import CalendrierAlternance from '../components/CalendrierAlternance';
+import { usePeriodesAlternance } from '../lib/usePeriodesAlternance';
+import { REMERCIEMENTS, INTRODUCTION, MISSION, NOTE_EXAMENS } from '../data/avantPropos';
 
 // Fix pour les icônes Leaflet par défaut
 if (L && L.Icon && L.Icon.Default) {
@@ -186,7 +189,9 @@ const Impression = () => {
   const [data, setData] = useState({ profile: null, certifications: [], formation: null, entreprise: null, chantiers: [], journal: [], themes: [] });
   const [loading, setLoading] = useState(true);
 
+  const periodesAlternance = usePeriodesAlternance();
   const [selection, setSelection] = useState({
+    avantPropos: true,
     profil: true,
     formation: true,
     entreprise: true,
@@ -293,6 +298,8 @@ const Impression = () => {
   const showRecapChantiers = selection.chantiers && renderableChantiers.length > 0;
   const showRecapThemes = themesToPrint.length > 0;
 
+  const pagesRemerciements = selection.avantPropos ? 1 : 0;
+  const pagesAvantPropos = selection.avantPropos ? 3 : 0; // introduction, mission, calendrier
   const pagesProfil = selection.profil ? 2 : 0;
   const pagesFormation = selection.formation ? 1 : 0;
   const pagesEntreprise = selection.entreprise ? 2 : 0;
@@ -301,11 +308,19 @@ const Impression = () => {
   const pagesRecapThemes = showRecapThemes ? 1 : 0;
   const pagesThemes = themesToPrint.length; // 1 page / thème
   const pagesComp = selection.competences ? 1 : 0;
-  const hasAnySelection = (pagesProfil + pagesFormation + pagesEntreprise + pagesChantiers + pagesRecapChantiers + pagesRecapThemes + pagesThemes + pagesComp) > 0;
+  const hasAnySelection = (pagesAvantPropos + pagesProfil + pagesFormation + pagesEntreprise + pagesChantiers + pagesRecapChantiers + pagesRecapThemes + pagesThemes + pagesComp) > 0;
 
-  // Page 1 = couverture (toujours), page 2 = sommaire (si sélection), contenu ensuite
-  let pageCursor = 2 + (hasAnySelection ? 1 : 0);
+  // Page 1 = couverture (toujours), puis remerciements, sommaire (si sélection), contenu ensuite
   const sectionPages = {};
+  let pageCursor = 2;
+  if (pagesRemerciements) { sectionPages.remerciements = pageCursor; pageCursor += 1; }
+  if (hasAnySelection) pageCursor += 1;
+  if (pagesAvantPropos) {
+    sectionPages.introduction = pageCursor;
+    sectionPages.mission = pageCursor + 1;
+    sectionPages.calendrier = pageCursor + 2;
+    pageCursor += pagesAvantPropos;
+  }
   if (pagesProfil) { sectionPages.profil = pageCursor; pageCursor += pagesProfil; }
   if (pagesFormation) { sectionPages.formation = pageCursor; pageCursor += pagesFormation; }
   if (pagesEntreprise) { sectionPages.entreprise = pageCursor; pageCursor += pagesEntreprise; }
@@ -912,6 +927,7 @@ const Impression = () => {
            <p>Prêt pour l'export</p>
         </div>
         <div className="selection-list">
+           <label className="select-item"><input type="checkbox" checked={selection.avantPropos} onChange={e => setSelection({...selection, avantPropos: e.target.checked})} /><span>Avant-propos (remerciements, intro, mission, calendrier)</span></label>
            <label className="select-item"><input type="checkbox" checked={selection.profil} onChange={e => setSelection({...selection, profil: e.target.checked})} /><span>Mon Profil</span></label>
            <label className="select-item"><input type="checkbox" checked={selection.formation} onChange={e => setSelection({...selection, formation: e.target.checked})} /><span>Ma Formation</span></label>
            <label className="select-item"><input type="checkbox" checked={selection.entreprise} onChange={e => setSelection({...selection, entreprise: e.target.checked})} /><span>Mon Entreprise</span></label>
@@ -1039,6 +1055,23 @@ const Impression = () => {
             </div>
           </div>
 
+          {/* REMERCIEMENTS (avant le sommaire) */}
+          {selection.avantPropos && (
+            <div className="print-page-wrap p-ap-page" id="pg-remerciements">
+              <div className="p-header-main" style={{ marginBottom: '2.5rem' }}>
+                <div className="p-info-box">
+                  <div className="p-eyebrow">AVANT-PROPOS</div>
+                  <h1 className="p-name">Remerciements</h1>
+                </div>
+              </div>
+              <div className="p-ap-body">
+                {REMERCIEMENTS.map((txt, i) => <p key={i} className="p-ap-text">{txt}</p>)}
+              </div>
+              <div className="page-context-footer">Remerciements</div>
+              <div className="page-number-footer"></div>
+            </div>
+          )}
+
           {/* SOMMAIRE INTELLIGENT (généré selon la sélection) */}
           {hasAnySelection && (
             <div className="print-page-wrap p-toc-page">
@@ -1050,6 +1083,14 @@ const Impression = () => {
                 </div>
               </div>
               <div className="p-toc-list">
+                {sectionPages.introduction && (
+                  <>
+                    <div className="p-toc-row clickable" onClick={() => goToPage('pg-remerciements')}><span className="p-toc-label">Remerciements</span><span className="p-toc-dots"></span><span className="p-toc-page">p. {sectionPages.remerciements}</span></div>
+                    <div className="p-toc-row clickable" onClick={() => goToPage('pg-introduction')}><span className="p-toc-label">Introduction</span><span className="p-toc-dots"></span><span className="p-toc-page">p. {sectionPages.introduction}</span></div>
+                    <div className="p-toc-row clickable" onClick={() => goToPage('pg-mission')}><span className="p-toc-label">Ma mission en entreprise</span><span className="p-toc-dots"></span><span className="p-toc-page">p. {sectionPages.mission}</span></div>
+                    <div className="p-toc-row clickable" onClick={() => goToPage('pg-calendrier')}><span className="p-toc-label">Calendrier d'alternance</span><span className="p-toc-dots"></span><span className="p-toc-page">p. {sectionPages.calendrier}</span></div>
+                  </>
+                )}
                 {sectionPages.profil && (
                   <div className="p-toc-row clickable" onClick={() => goToPage('pg-profil')}><span className="p-toc-label">Mon Profil</span><span className="p-toc-dots"></span><span className="p-toc-page">p. {sectionPages.profil}</span></div>
                 )}
@@ -1103,6 +1144,66 @@ const Impression = () => {
             </div>
           )}
 
+          {selection.avantPropos && (
+            <>
+              <div className="print-page-wrap p-ap-page" id="pg-introduction">
+                <div className="p-header-main" style={{ marginBottom: '2rem' }}>
+                  <div className="p-info-box">
+                    <div className="p-eyebrow">AVANT-PROPOS</div>
+                    <h1 className="p-name">Introduction</h1>
+                  </div>
+                </div>
+                <div className="p-ap-body">
+                  {INTRODUCTION.map((txt, i) => <p key={i} className="p-ap-text">{txt}</p>)}
+                </div>
+                <div className="page-context-footer">Introduction</div>
+                <div className="page-number-footer"></div>
+              </div>
+
+              <div className="print-page-wrap p-ap-page" id="pg-mission">
+                <div className="p-header-main" style={{ marginBottom: '1.5rem' }}>
+                  <div className="p-info-box">
+                    <div className="p-eyebrow">AVANT-PROPOS</div>
+                    <h1 className="p-name">Ma mission en entreprise</h1>
+                    <div className="p-sub">{MISSION.poste} — {MISSION.posteReel.toLowerCase()}</div>
+                  </div>
+                </div>
+                <div className="p-ap-infos">
+                  {MISSION.infos.map(info => (
+                    <div key={info.label} className="p-ap-info"><span>{info.label}</span><strong>{info.value}</strong></div>
+                  ))}
+                </div>
+                <div className="p-ap-groupes">
+                  {MISSION.groupes.map(g => (
+                    <div key={g.titre} className="print-card p-ap-groupe">
+                      <div className="p-ap-groupe-head">
+                        <span>{g.titre}</span>
+                        <span className="p-ap-comps">{g.competences.map(c => <em key={c}>{c}</em>)}</span>
+                      </div>
+                      <ul>{g.items.map(it => <li key={it}>{it}</li>)}</ul>
+                    </div>
+                  ))}
+                </div>
+                <div className="page-context-footer">Ma mission en entreprise</div>
+                <div className="page-number-footer"></div>
+              </div>
+
+              <div className="print-page-wrap p-ap-page" id="pg-calendrier">
+                <div className="p-header-main" style={{ marginBottom: '1.2rem' }}>
+                  <div className="p-info-box">
+                    <div className="p-eyebrow">AVANT-PROPOS</div>
+                    <h1 className="p-name">Calendrier d'alternance</h1>
+                    <div className="p-sub">2 semaines en entreprise / 2 semaines au CFA</div>
+                  </div>
+                </div>
+                <CalendrierAlternance periods={periodesAlternance} compact />
+                <p className="p-ap-note">{NOTE_EXAMENS}</p>
+                <div className="page-context-footer">Calendrier d'alternance</div>
+                <div className="page-number-footer"></div>
+              </div>
+            </>
+          )}
+
           {selection.profil && (
             <>
               <div className="print-page-wrap" id="pg-profil">
@@ -1153,7 +1254,7 @@ const Impression = () => {
             <div className="print-page-wrap" id="pg-formation">
                <div className="p-header-main formation-header">
                   <div className="p-avatar-box formation-logo-box">
-                     <div className="logo-stripes-bg"><img src={formation.avatar_url} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} /></div>
+                     <div className="logo-stripes-bg"><img src={formation.avatar_url?.includes('UFA + CFA') ? '/logo-ufa-corbusier.png' : formation.avatar_url} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} /></div>
                   </div>
                   <div className="p-info-box">
                      <div className="p-eyebrow">{formation.eyebrow || 'FORMATION PROFESSIONNELLE'}</div>
@@ -1263,6 +1364,7 @@ const Impression = () => {
           @page { margin: 0; size: A4; }
           html, body { background-color: var(--bg) !important; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .impression-sidebar { display: none !important; }
+          .content, .impression-page, .impression-preview { padding: 0 !important; margin: 0 !important; }
           .print-page-wrap:last-child { page-break-after: auto; }
           .p-cover { height: 296mm; min-height: 0; overflow: hidden; }
         }
@@ -1455,6 +1557,22 @@ const Impression = () => {
         .p-cover-info-qr { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
         .p-cover-info-qr img { width: 52px; height: 52px; flex-shrink: 0; border-radius: 4px; }
         .p-cover-info-qr .p-cover-info-sub { overflow-wrap: normal; }
+
+        /* AVANT-PROPOS */
+        .p-ap-body { max-width: 640px; }
+        .p-ap-text { font-family: 'Inter', sans-serif; font-size: 12.5px; line-height: 1.85; color: var(--ink); margin: 0 0 1rem; text-align: justify; }
+        .p-ap-infos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1.2rem; }
+        .p-ap-info { background: var(--bg-card) !important; border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 3px; -webkit-print-color-adjust: exact; }
+        .p-ap-info span { font-family: 'Inter', sans-serif; font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); }
+        .p-ap-info strong { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; color: var(--ink); }
+        .p-ap-groupes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .p-ap-groupe { padding: 14px 16px !important; }
+        .p-ap-groupe-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-family: 'Playfair Display', serif; font-size: 14px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+        .p-ap-comps { display: flex; gap: 4px; }
+        .p-ap-comps em { font-style: normal; font-family: 'Inter', sans-serif; font-size: 9px; font-weight: 700; color: var(--accent); background: rgba(139,110,78,0.12) !important; border-radius: 5px; padding: 2px 5px; -webkit-print-color-adjust: exact; }
+        .p-ap-groupe ul { margin: 0; padding-left: 16px; }
+        .p-ap-groupe li { font-family: 'Inter', sans-serif; font-size: 11px; line-height: 1.6; color: var(--ink); }
+        .p-ap-note { font-family: 'Inter', sans-serif; font-size: 10px; font-style: italic; color: var(--accent); margin-top: 0.8rem; }
 
         /* SOMMAIRE intelligent */
         .p-toc-list { display: flex; flex-direction: column; gap: 2px; margin-top: 1rem; }

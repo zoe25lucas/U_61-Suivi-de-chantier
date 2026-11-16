@@ -10,6 +10,7 @@ import Impression from './pages/Impression';
 import Journal from './pages/Journal';
 import Entreprise from './pages/Entreprise';
 import Themes from './pages/Themes';
+import AvantPropos from './pages/AvantPropos';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
       <Layout>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/avant-propos" element={<AvantPropos />} />
           <Route path="/profil" element={<Profile />} />
           <Route path="/formation" element={<Formation />} />
           <Route path="/entreprise" element={<Entreprise />} />
