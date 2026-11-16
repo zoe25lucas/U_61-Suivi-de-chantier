@@ -12,7 +12,7 @@ const DEFAULT_FORMATION = {
   sub: "En alternance",
   website: "lyceelecorbusier.eu",
   description: "Le Brevet de Technicien Supérieur Bâtiment forme des professionnels capables d'intervenir dans les différentes phases de la construction d'un ouvrage. En alternance, la formation allie enseignement théorique (études, méthodes, économie) et pratique sur le terrain en entreprise.",
-  avatar_url: "/UFA + CFA Acdemique.avif",
+  avatar_url: "/logo-ufa-corbusier.png",
   sections: [
     {
       id: 's_ufa',
@@ -125,7 +125,7 @@ export default function Formation() {
       <div className="profil-header">
         <div className="profil-avatar-wrap" style={{ width: '280px', height: '110px' }}>
           <div style={{ width: '100%', height: '100%', background: 'var(--bg-stripe)', border: '3px solid var(--accent-cord)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '10px' }}>
-            <img src={formation.avatar_url} alt="Logo UFA" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+            <img src={formation.avatar_url?.includes('UFA + CFA') ? '/logo-ufa-corbusier.png' : formation.avatar_url} alt="Logo UFA" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
           </div>
         </div>
 

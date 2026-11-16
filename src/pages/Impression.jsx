@@ -77,6 +77,24 @@ const DEFAULT_COMPANY = {
   }
 };
 
+// Informations de la page de garde (alignées sur la fiche Annexe 12 signée)
+const COVER_SITE_URL = 'u-61-suivi-de-chantier.vercel.app';
+const COVER_INFO = [
+  { label: 'Entreprise d\'accueil', value: 'Sogea Est BTP', sub: 'Agence de Krautergersheim · VINCI Construction' },
+  { label: 'Maître d\'apprentissage', value: 'Benoît HERTZOG', sub: 'Chef de secteur' },
+  { label: 'Centre de formation', value: 'UFA Le Corbusier', sub: 'Illkirch-Graffenstaden (67)' },
+  { label: 'Formateur référent', value: 'M. Frédéric ROUSSEY' },
+  { label: 'Période d\'apprentissage', value: 'Septembre 2025 — Août 2027' },
+];
+
+// "Zoé Lucas" -> "Zoé LUCAS"
+const formatCoverName = (fullName) => {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length < 2) return fullName;
+  const last = parts.pop();
+  return `${parts.join(' ')} ${last.toUpperCase()}`;
+};
+
 const CHECKLIST_SECTIONS = {
   diagnostics: {
     title: "Liste Documents",
@@ -978,18 +996,19 @@ const Impression = () => {
             {/* Bandeau de logos en haut de page */}
             <div className="p-cover-logos">
               <div className="p-cover-logo-card">
-                <img src="/logo sogea.jpg" alt="SOGEA" />
+                <img src="/logo-sogea.png" alt="SOGEA" />
                 <span className="p-cover-logo-sep"></span>
-                <img src={formation.avatar_url || '/UFA + CFA Acdemique.avif'} alt="CFA / Lycée Le Corbusier" />
+                <img src="/logo-ufa-corbusier.png" alt="UFA Le Corbusier" />
               </div>
             </div>
 
             <div className="p-cover-inner">
-              <div className="p-cover-eyebrow">Dossier professionnel · Épreuve U61 — Suivi de chantier</div>
-              <h1 className="p-cover-name">{(data.profile?.full_name || 'Zoé Lucas')}</h1>
+              <div className="p-cover-eyebrow">Rapport d'activités en milieu professionnel (C.R.A.M.P.)</div>
+              <div className="p-cover-epreuve">Épreuve U61 — Suivi de chantier</div>
+              <h1 className="p-cover-name">{formatCoverName(data.profile?.full_name || 'Zoé Lucas')}</h1>
               <div className="p-cover-rule"></div>
               <div className="p-cover-formation">BTS Bâtiment · Alternance</div>
-              <div className="p-cover-year">2025 — 2027</div>
+              <div className="p-cover-year">2025 — 2027 · Session 2027</div>
 
               {data.profile?.avatar_url && (
                 <div className="p-cover-portrait">
@@ -1002,21 +1021,19 @@ const Impression = () => {
               )}
 
               <div className="p-cover-info">
-                <div className="p-cover-info-item">
-                  <span className="p-cover-info-label">Établissement de formation</span>
-                  <span className="p-cover-info-value">Lycée polyvalent Le Corbusier</span>
-                </div>
-                <div className="p-cover-info-item">
-                  <span className="p-cover-info-label">Entreprise d'accueil</span>
-                  <span className="p-cover-info-value">{entreprise.name || 'SOGEA Environnement'}</span>
-                </div>
-                <div className="p-cover-info-item">
-                  <span className="p-cover-info-label">Maître d'apprentissage</span>
-                  <span className="p-cover-info-value">Benoît HERTZOG</span>
-                </div>
-                <div className="p-cover-info-item">
-                  <span className="p-cover-info-label">Période</span>
-                  <span className="p-cover-info-value">Septembre 2025 — Août 2027</span>
+                {COVER_INFO.map(item => (
+                  <div className="p-cover-info-item" key={item.label}>
+                    <span className="p-cover-info-label">{item.label}</span>
+                    <span className="p-cover-info-value">{item.value}</span>
+                    {item.sub && <span className="p-cover-info-sub">{item.sub}</span>}
+                  </div>
+                ))}
+                <div className="p-cover-info-item p-cover-info-qr">
+                  <img src="/qr-site.png" alt="QR code vers le site" />
+                  <div>
+                    <span className="p-cover-info-label">Version en ligne</span>
+                    <span className="p-cover-info-sub">{COVER_SITE_URL.replace('.vercel.app', '')}<br />.vercel.app</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1417,22 +1434,27 @@ const Impression = () => {
         .p-cover { display: flex; align-items: center; justify-content: center; overflow: hidden; }
         .p-cover-accent { position: absolute; top: -120px; right: -120px; width: 320px; height: 320px; background: var(--accent) !important; opacity: 0.08; transform: rotate(45deg); -webkit-print-color-adjust: exact; }
         .p-cover::before { content: ''; position: absolute; bottom: -130px; left: -130px; width: 300px; height: 300px; background: var(--accent) !important; opacity: 0.06; transform: rotate(45deg); -webkit-print-color-adjust: exact; }
-        .p-cover-inner { position: relative; z-index: 2; width: 100%; max-width: 520px; text-align: center; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .p-cover-inner { position: relative; z-index: 2; width: 100%; max-width: 540px; margin-top: 70px; text-align: center; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         .p-cover-logos { position: absolute; top: 56px; left: 0; right: 0; z-index: 3; display: flex; justify-content: center; }
         .p-cover-logo-card { background: #ffffff !important; border: 1px solid var(--border); border-radius: 18px; padding: 16px 34px; display: flex; align-items: center; justify-content: center; gap: 30px; box-shadow: 0 6px 18px rgba(44,35,24,0.06); -webkit-print-color-adjust: exact; }
-        .p-cover-logo-card img { height: 58px; width: auto; max-width: 170px; object-fit: contain; }
+        .p-cover-logo-card img { height: 52px; width: auto; max-width: 200px; object-fit: contain; }
         .p-cover-logo-sep { width: 1px; height: 50px; background: var(--border); flex-shrink: 0; }
-        .p-cover-eyebrow { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); margin-bottom: 18px; }
+        .p-cover-eyebrow { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+        .p-cover-epreuve { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; color: var(--ink); opacity: 0.8; margin-bottom: 20px; }
         .p-cover-name { font-family: 'Playfair Display', serif; font-size: 64px; font-weight: 900; color: var(--ink); line-height: 1; margin: 0; }
         .p-cover-rule { width: 80px; height: 3px; background: var(--accent) !important; border-radius: 3px; margin: 22px 0 18px; -webkit-print-color-adjust: exact; }
         .p-cover-formation { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--ink); opacity: 0.85; }
         .p-cover-year { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700; color: var(--accent); margin-top: 6px; letter-spacing: 1px; }
-        .p-cover-portrait { width: 150px; height: 150px; border-radius: 50%; border: 3px solid var(--accent); overflow: hidden; position: relative; margin: 38px 0; flex-shrink: 0; -webkit-print-color-adjust: exact; }
+        .p-cover-portrait { width: 130px; height: 130px; border-radius: 50%; border: 3px solid var(--accent); overflow: hidden; position: relative; margin: 28px 0; flex-shrink: 0; -webkit-print-color-adjust: exact; }
         .p-cover-portrait img { position: absolute; top: 50%; left: 50%; min-width: 100%; min-height: 100%; width: auto; height: auto; }
         .p-cover-info { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; margin-top: 14px; }
         .p-cover-info-item { background: var(--bg-card) !important; border: 1px solid var(--border); border-radius: 16px; padding: 14px 18px; text-align: left; -webkit-print-color-adjust: exact; }
         .p-cover-info-label { display: block; font-family: 'Inter', sans-serif; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 4px; }
         .p-cover-info-value { display: block; font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; color: var(--ink); line-height: 1.2; }
+        .p-cover-info-sub { display: block; font-family: 'Inter', sans-serif; font-size: 10.5px; font-weight: 500; color: var(--ink); opacity: 0.7; margin-top: 3px; line-height: 1.3; }
+        .p-cover-info-qr { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
+        .p-cover-info-qr img { width: 52px; height: 52px; flex-shrink: 0; border-radius: 4px; }
+        .p-cover-info-qr .p-cover-info-sub { overflow-wrap: normal; }
 
         /* SOMMAIRE intelligent */
         .p-toc-list { display: flex; flex-direction: column; gap: 2px; margin-top: 1rem; }
