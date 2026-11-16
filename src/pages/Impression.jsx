@@ -1561,6 +1561,10 @@ const Impression = () => {
         .p-cover-info-qr img { width: 52px; height: 52px; flex-shrink: 0; border-radius: 4px; }
         .p-cover-info-qr .p-cover-info-sub { overflow-wrap: normal; }
 
+        /* Ajustements pour tenir sur une page A4 */
+        .p-col-left > .print-card:last-child, .p-col-right > .print-card:last-child { margin-bottom: 0; }
+        #pg-formation .p-header-main { padding-bottom: 1.25rem; margin-bottom: 1.25rem; }
+
         /* AVANT-PROPOS */
         .p-ap-body { max-width: 640px; }
         .p-ap-text { font-family: 'Inter', sans-serif; font-size: 12.5px; line-height: 1.85; color: var(--ink); margin: 0 0 1rem; text-align: justify; }
