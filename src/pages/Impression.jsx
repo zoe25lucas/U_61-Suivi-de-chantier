@@ -8,7 +8,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import CalendrierAlternance from '../components/CalendrierAlternance';
 import { usePeriodesAlternance } from '../lib/usePeriodesAlternance';
-import { REMERCIEMENTS, INTRODUCTION, MISSION, NOTE_EXAMENS } from '../data/avantPropos';
+import { useAvantPropos } from '../lib/useAvantPropos';
 
 // Fix pour les icônes Leaflet par défaut
 if (L && L.Icon && L.Icon.Default) {
@@ -190,6 +190,8 @@ const Impression = () => {
   const [loading, setLoading] = useState(true);
 
   const periodesAlternance = usePeriodesAlternance();
+  const { content: avantPropos } = useAvantPropos();
+  const { remerciements: REMERCIEMENTS, introduction: INTRODUCTION, mission: MISSION, note_examens: NOTE_EXAMENS } = avantPropos;
   const [selection, setSelection] = useState({
     avantPropos: true,
     profil: true,
@@ -1165,22 +1167,22 @@ const Impression = () => {
                   <div className="p-info-box">
                     <div className="p-eyebrow">AVANT-PROPOS</div>
                     <h1 className="p-name">Ma mission en entreprise</h1>
-                    <div className="p-sub">{MISSION.poste} — {MISSION.posteReel.toLowerCase()}</div>
+                    <div className="p-sub">{MISSION.poste}{MISSION.posteReel ? ` — ${MISSION.posteReel.toLowerCase()}` : ''}</div>
                   </div>
                 </div>
                 <div className="p-ap-infos">
-                  {MISSION.infos.map(info => (
-                    <div key={info.label} className="p-ap-info"><span>{info.label}</span><strong>{info.value}</strong></div>
+                  {MISSION.infos.map((info, i) => (
+                    <div key={i} className="p-ap-info"><span>{info.label}</span><strong>{info.value}</strong></div>
                   ))}
                 </div>
                 <div className="p-ap-groupes">
-                  {MISSION.groupes.map(g => (
-                    <div key={g.titre} className="print-card p-ap-groupe">
+                  {MISSION.groupes.map((g, gi) => (
+                    <div key={gi} className="print-card p-ap-groupe">
                       <div className="p-ap-groupe-head">
                         <span>{g.titre}</span>
                         <span className="p-ap-comps">{g.competences.map(c => <em key={c}>{c}</em>)}</span>
                       </div>
-                      <ul>{g.items.map(it => <li key={it}>{it}</li>)}</ul>
+                      <ul>{g.items.map((it, j) => <li key={j}>{it}</li>)}</ul>
                     </div>
                   ))}
                 </div>
@@ -1197,7 +1199,7 @@ const Impression = () => {
                   </div>
                 </div>
                 <CalendrierAlternance periods={periodesAlternance} compact />
-                <p className="p-ap-note">{NOTE_EXAMENS}</p>
+                {NOTE_EXAMENS && <p className="p-ap-note">{NOTE_EXAMENS}</p>}
                 <div className="page-context-footer">Calendrier d'alternance</div>
                 <div className="page-number-footer"></div>
               </div>
