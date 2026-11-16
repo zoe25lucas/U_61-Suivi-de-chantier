@@ -9,6 +9,7 @@ import 'leaflet/dist/leaflet.css';
 import CalendrierAlternance from '../components/CalendrierAlternance';
 import { usePeriodesAlternance } from '../lib/usePeriodesAlternance';
 import { useAvantPropos } from '../lib/useAvantPropos';
+import { withLiveAge } from '../lib/age';
 
 // Fix pour les icônes Leaflet par défaut
 if (L && L.Icon && L.Icon.Default) {
@@ -1216,7 +1217,7 @@ const Impression = () => {
                   <div className="p-info-box">
                     <div className="p-eyebrow">{profile.eyebrow}</div>
                     <h1 className="p-name">{profile.full_name}</h1>
-                    <div className="p-sub">{profile.age_text}</div>
+                    <div className="p-sub">{withLiveAge(profile.age_text, profile.birth_date)}</div>
                     <div className="p-contact-row">
                        <div className="p-chip"><Mail size={12}/> <span>{profile.email}</span></div>
                        <div className="p-chip"><Phone size={12}/> <span>{profile.phone}</span></div>

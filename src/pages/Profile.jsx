@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { withLiveAge } from "../lib/age";
 import { 
   Mail, Phone, MapPin, User, Star, BookOpen, Clock, ExternalLink, 
   Edit2, Check, Plus, Trash2, Camera, Maximize, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Award 
@@ -9,7 +10,7 @@ const DEFAULT_PROFILE = {
   full_name: "Zoé Lucas",
   eyebrow: "BTS BÂTIMENT · ALTERNANCE 2025-2027",
   job_title: "Étudiante",
-  age_text: "Étudiante - 20 ans (25.04.2005)",
+  age_text: "Étudiante - 21 ans (25.04.2005)",
   email: "zoe25.lucas@gmail.com",
   phone: "+33 7 60 90 75 54",
   address: "2b rue de la forge, 57 200 Rémelfing (France)",
@@ -217,7 +218,7 @@ export default function Profile() {
             <>
               <div className="profil-eyebrow">{profile.eyebrow}</div>
               <h1 className="profil-name">{profile.full_name}</h1>
-              <div className="profil-sub">{profile.age_text}</div>
+              <div className="profil-sub">{withLiveAge(profile.age_text, profile.birth_date)}</div>
               <div className="profil-contacts">
                 <a href={`mailto:${profile.email}`} className="profil-contact-chip"><Mail size={12} /> {profile.email}</a>
                 <a href={`tel:${profile.phone}`} className="profil-contact-chip"><Phone size={12} /> {profile.phone}</a>
