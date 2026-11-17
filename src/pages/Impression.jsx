@@ -63,7 +63,7 @@ const DEFAULT_COMPANY = {
         name: "BENOIT HERTZOG",
         role: "Chef de secteur",
         children: [
-          { name: "ZOÉ LUCAS", role: "Alternante aide chef de chantier", isUser: true },
+          { name: "ZOÉ LUCAS", role: "Alternante assistante chef de chantier", isUser: true },
           { name: "FLORINE DIGNIEL", role: "Alternante bureau d'études" },
           { name: "JOSE VALENTE FERREIRA", role: "Chef d'équipe" },
           { name: "NUNO DA SILVA", role: "Chef de chantier" },

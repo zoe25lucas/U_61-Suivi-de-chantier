@@ -17,8 +17,8 @@ export const INTRODUCTION = [
 ];
 
 export const MISSION = {
-  poste: "Alternante aide chef de chantier",
-  posteReel: "Missions exercées : assistante conducteur de travaux",
+  poste: "Alternante assistante chef de chantier",
+  posteReel: "Missions exercées : assistante conductrice de travaux",
   infos: [
     { label: 'Entreprise', value: 'Sogea Est BTP — Agence de Krautergersheim' },
     { label: "Maître d'apprentissage", value: 'Benoît HERTZOG, chef de secteur' },
