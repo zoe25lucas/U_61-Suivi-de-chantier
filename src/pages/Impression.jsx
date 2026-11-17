@@ -12,6 +12,7 @@ import { useAvantPropos } from '../lib/useAvantPropos';
 import { withLiveAge } from '../lib/age';
 import EntrepriseBlock from '../components/EntrepriseBlocks';
 import OrgChart from '../components/OrgChart';
+import ThemeExtras from '../components/ThemeExtras';
 import { ENTREPRISE_BLOCK_TYPES } from '../lib/entrepriseBlockTypes';
 
 // Fix pour les icônes Leaflet par défaut
@@ -238,7 +239,7 @@ const Impression = () => {
           entreprise: resEnt.data,
           chantiers: resProjects.data || [],
           journal: resJournals.data || [],
-          themes: resThemes.data || []
+          themes: (resThemes.data || []).slice().sort((a, b) => ((a.position ?? 1e9) - (b.position ?? 1e9)) || (new Date(a.created_at || 0) - new Date(b.created_at || 0)))
         });
 
         if (resProjects.data) {
@@ -314,7 +315,7 @@ const Impression = () => {
   const pagesChantiers = renderableChantiers.length * 2; // 2 pages / chantier
   const pagesRecapChantiers = showRecapChantiers ? chantierChunks.length : 0;
   const pagesRecapThemes = showRecapThemes ? 1 : 0;
-  const pagesThemes = themesToPrint.length; // 1 page / thème
+  const pagesThemes = themesToPrint.reduce((acc, t) => acc + Math.max(1, ...(t.sections || []).map(sec => sec.page || 1)), 0);
   const pagesComp = selection.competences ? 1 : 0;
   const hasAnySelection = (pagesAvantPropos + pagesProfil + pagesFormation + pagesEntreprise + pagesChantiers + pagesRecapChantiers + pagesRecapThemes + pagesThemes + pagesComp) > 0;
 
@@ -339,7 +340,7 @@ const Impression = () => {
   // Récap thèmes AVANT les pages thèmes
   if (pagesRecapThemes) { sectionPages.recapThemes = pageCursor; pageCursor += pagesRecapThemes; }
   const themePageMap = {};
-  themesToPrint.forEach(t => { themePageMap[t.id] = pageCursor; pageCursor += 1; });
+  themesToPrint.forEach(t => { themePageMap[t.id] = pageCursor; pageCursor += Math.max(1, ...(t.sections || []).map(sec => sec.page || 1)); });
   if (pagesComp) { sectionPages.competences = pageCursor; pageCursor += pagesComp; }
   const totalPages = pageCursor - 1;
 
@@ -834,53 +835,64 @@ const Impression = () => {
     </div>
   );
 
-  // Page d'un thème d'étude
+  // Pages d'un thème d'étude : chaque section porte un numéro de page (sec.page, 1 par défaut)
+  const themePagesCount = (theme) => Math.max(1, ...(theme.sections || []).map(sec => sec.page || 1));
   const renderThemePage = (theme) => {
     const comps = theme.competences || [];
     const linkedCh = data.chantiers.find(c => c.id === theme.chantier_id);
-    return (
-      <div className="print-page-wrap" key={theme.id} id={`pg-theme-${theme.id}`}>
-        <div className="p-header-top">
-          <div className="p-header-left">
-            <div className="p-company-logo">SOGEA</div>
-            <div className="p-eyebrow">THÈME D'ÉTUDE · THÈME N°{themeNumberMap[theme.id] || ''}</div>
-          </div>
-        </div>
-        <h1 className="p-chantier-title-main" style={{ marginBottom: '8px' }}>Thème N°{themeNumberMap[theme.id] || ''} — {theme.title}</h1>
-        {linkedCh && (
-          <div className="p-address-row" style={{ marginBottom: '14px' }}>
-            <Building2 size={14} color="var(--accent)" /> <span>Chantier associé : {linkedCh.nom}</span>
-          </div>
-        )}
-        {comps.length > 0 && (
-          <div className="print-card p-comp-top" style={{ marginBottom: '1.2rem' }}>
-            <div className="p-card-head"><Award size={18} /> <span>Compétences visées</span></div>
-            <div className="p-comp-pills" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-              {comps.map(code => {
-                let color = '#cccccc';
-                Object.values(COMPETENCES_REF).forEach(g => { if (g.items.find(it => it.id === code)) color = g.color; });
-                return <span key={code} className="p-comp-pill" style={{ background: `${color}33`, borderColor: color }}><strong>{code}</strong></span>;
-              })}
-            </div>
-          </div>
-        )}
-        {(theme.sections || []).map(sec => (
-          <div className="print-card" key={sec.id}>
-            <div className="p-card-head"><FileText size={18} /> <span>{sec.title}</span></div>
-            {String(sec.text || '').split('\n').map((p, i) => (
-              <p className="p-card-text" key={i} style={{ margin: '2px 0' }}>{p}</p>
-            ))}
-            {(sec.images || []).length > 0 && (
-              <div className="p-theme-imgs">
-                {sec.images.slice(0, 3).map(img => <img key={img.id} src={img.url} alt={img.caption || ''} />)}
+    const nPages = themePagesCount(theme);
+    return Array.from({ length: nPages }, (_, k) => k + 1).map(n => (
+      <div className="print-page-wrap" key={`${theme.id}-${n}`} id={n === 1 ? `pg-theme-${theme.id}` : undefined}>
+        {n === 1 && (
+          <>
+            <div className="p-header-top">
+              <div className="p-header-left">
+                <div className="p-company-logo">SOGEA</div>
+                <div className="p-eyebrow">THÈME D'ÉTUDE · THÈME N°{themeNumberMap[theme.id] || ''}</div>
               </div>
-            )}
-          </div>
-        ))}
+            </div>
+            <h1 className="p-chantier-title-main" style={{ marginBottom: '8px' }}>Thème N°{themeNumberMap[theme.id] || ''} — {theme.title}</h1>
+            <div className="p-theme-meta">
+              {linkedCh && <span className="p-address-row"><Building2 size={14} color="var(--accent)" /> <span>Chantier : {linkedCh.nom}</span></span>}
+              {comps.length > 0 && (
+                <span className="p-comp-pills" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  {comps.map(code => {
+                    let color = '#cccccc';
+                    Object.values(COMPETENCES_REF).forEach(g => { if (g.items.find(it => it.id === code)) color = g.color; });
+                    return <span key={code} className="p-comp-pill" style={{ background: `${color}33`, borderColor: color }}><strong>{code}</strong></span>;
+                  })}
+                </span>
+              )}
+            </div>
+          </>
+        )}
+        {(theme.sections || []).filter(sec => (sec.page || 1) === n).map((sec) => {
+          const idx = (theme.sections || []).indexOf(sec);
+          const imgs = sec.images || [];
+          return (
+            <div className={`print-card p-theme-sec kind-${sec.kind || 'etape'}`} key={sec.id}>
+              <div className="p-card-head"><span className="p-theme-num">{idx + 1}</span> <span>{sec.title}</span></div>
+              {String(sec.text || '').split('\n').filter(Boolean).map((p, i) => (
+                <p className="p-card-text" key={i} style={{ margin: '2px 0 4px' }}>{p}</p>
+              ))}
+              <ThemeExtras sec={sec} print />
+              {imgs.length > 0 && (
+                <div className={`p-theme-imgs n${Math.min(imgs.length, 3)}`}>
+                  {imgs.map(img => (
+                    <figure key={img.id || img.url}>
+                      <img src={img.url} alt={img.caption || ''} />
+                      {img.caption && <figcaption>{img.caption}</figcaption>}
+                    </figure>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
         <div className="page-context-footer">Thèmes — {theme.title}</div>
         <div className="page-number-footer"></div>
       </div>
-    );
+    ));
   };
 
   // Matrice récap : compétences (lignes) × entités (colonnes numérotées), ✓ coloré
@@ -1634,8 +1646,18 @@ const Impression = () => {
         .p-toc-row.toc-depth-1 .p-toc-label { font-size: 14px; font-weight: 600; font-family: 'Inter', sans-serif; }
         .p-toc-row.toc-depth-1::before { content: "└"; color: var(--accent); opacity: 0.5; }
         .p-toc-row.is-parent .p-toc-label { font-size: 15px; font-weight: 900; }
-        .p-theme-imgs { display: flex; gap: 8px; margin-top: 10px; }
-        .p-theme-imgs img { flex: 1; max-width: 33%; border-radius: 10px; max-height: 130px; object-fit: cover; }
+        .p-theme-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+        .p-theme-sec { padding: 14px 18px !important; margin-bottom: 12px !important; break-inside: avoid; }
+        .p-theme-sec.kind-objectif, .p-theme-sec.kind-analyse { background: #F7F0E6 !important; }
+        .p-theme-sec.kind-bilan { background: #EEF5EC !important; }
+        .p-theme-num { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--accent) !important; color: #fff; font-size: 10px; font-weight: 800; -webkit-print-color-adjust: exact; }
+        .p-theme-imgs { display: grid; gap: 8px; margin-top: 8px; grid-template-columns: repeat(3, 1fr); }
+        .p-theme-imgs.n1 { grid-template-columns: 1fr; }
+        .p-theme-imgs.n2 { grid-template-columns: repeat(2, 1fr); }
+        .p-theme-imgs figure { margin: 0; display: flex; flex-direction: column; gap: 3px; }
+        .p-theme-imgs img { width: 100%; height: 125px; object-fit: contain; background: #fff; border: 1px solid var(--border); border-radius: 8px; -webkit-print-color-adjust: exact; }
+        .p-theme-imgs.n1 img { height: 170px; }
+        .p-theme-imgs figcaption { font-family: 'Inter', sans-serif; font-size: 8.5px; color: var(--accent); font-weight: 600; text-align: center; }
 
         /* Matrice récapitulative des compétences */
         .recap-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; margin: 6px 0 14px; padding: 12px 14px; background: var(--bg-card) !important; border: 1px solid var(--border); border-radius: 12px; -webkit-print-color-adjust: exact; }
