@@ -1,0 +1,17 @@
+.tx { margin: 12px 0 4px 40px; display: flex; flex-direction: column; gap: 10px; }
+.tx-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; background: #fff; border: 1px solid rgba(44,35,24,0.12); border-radius: 12px; overflow: hidden; }
+.tx-table th { background: #8B6E4E; color: #fff; text-align: left; padding: 8px 10px; font-size: 11px; letter-spacing: 0.4px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.tx-table td { padding: 7px 10px; border-top: 1px solid rgba(44,35,24,0.08); color: #2C2318; vertical-align: top; }
+.tx-table tr.tx-total td { font-weight: 800; background: #FFF3E0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.tx-note { background: #FFF8EE; border-left: 4px solid #8B6E4E; border-radius: 8px; padding: 10px 14px; font-size: 13px; line-height: 1.6; color: #2C2318; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+/* Mise en valeur des sections objectif / analyse / bilan sur le site */
+.dossier-section-container.kind-objectif, .dossier-section-container.kind-analyse, .dossier-section-container.kind-bilan { background: rgba(139,110,78,0.07); border-radius: 18px; padding: 18px 20px 14px; }
+.dossier-section-container.kind-bilan { background: rgba(46,125,50,0.07); }
+
+/* Version PDF */
+.tx-print { margin: 6px 0 2px; gap: 6px; }
+.tx-print .tx-table { font-size: 9.5px; }
+.tx-print .tx-table th { font-size: 8.5px; padding: 5px 7px; }
+.tx-print .tx-table td { padding: 4px 7px; }
+.tx-print .tx-note { font-size: 10px; padding: 7px 10px; line-height: 1.5; }

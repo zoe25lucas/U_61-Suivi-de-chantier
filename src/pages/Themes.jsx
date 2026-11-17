@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import ThemeExtras from '../components/ThemeExtras';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { 
@@ -784,7 +785,7 @@ const Themes = () => {
                     const hasImages = imgs.length > 0;
                     
                     return (
-                      <div key={sec.id} className="dossier-section-container">
+                      <div key={sec.id} className={`dossier-section-container ${sec.kind ? `kind-${sec.kind}` : ''}`}>
                         
                         {/* Section Heading */}
                         <h2 className="dossier-section-heading" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -853,6 +854,7 @@ const Themes = () => {
                             </div>
                           </div>
                         )}
+                        <ThemeExtras sec={sec} />
                       </div>
                     );
                   })}
