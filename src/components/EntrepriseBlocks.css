@@ -1,0 +1,30 @@
+/* Chaîne "du groupe à mon agence" */
+.eb-chain { position: relative; display: flex; flex-direction: column; gap: 6px; padding-left: 4px; }
+.eb-chain-item { position: relative; display: flex; gap: 12px; align-items: flex-start; padding: 6px 10px; border-radius: 12px; border: 1px solid transparent; }
+.eb-chain-item:not(:last-child)::after { content: ""; position: absolute; left: 15px; top: 22px; bottom: -10px; width: 1.5px; background: rgba(139,110,78,0.35); }
+.eb-chain-item.highlight { background: #fff; border-color: #8B6E4E; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.eb-chain-dot { width: 11px; height: 11px; border-radius: 50%; background: #8B6E4E; margin-top: 4px; flex-shrink: 0; z-index: 1; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.eb-chain-niveau { font-size: 9px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #8B6E4E; }
+.eb-chain-nom { font-family: 'Playfair Display', serif; font-size: 14px; font-weight: 700; color: #2C2318; line-height: 1.25; }
+.eb-chain-detail { font-size: 11px; color: #5C4E3A; line-height: 1.45; margin-top: 1px; }
+
+/* Chiffres clés */
+.eb-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.eb-kpi { background: #fff; border: 1px solid rgba(44,35,24,0.10); border-radius: 12px; padding: 10px 8px; text-align: center; display: flex; flex-direction: column; gap: 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.eb-kpi-value { white-space: nowrap; font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 800; color: #2C2318; line-height: 1.1; }
+.eb-kpi-label { font-size: 10px; color: #8B6E4E; font-weight: 600; line-height: 1.3; }
+
+/* Graphique en barres */
+.eb-bars { display: flex; flex-direction: column; gap: 7px; }
+.eb-bar-label { font-size: 11px; font-weight: 600; color: #2C2318; margin-bottom: 3px; }
+.eb-bar-track { position: relative; height: 20px; background: #f3eee6; border-radius: 6px; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.eb-bar-fill { height: 100%; background: #8B6E4E; border-radius: 6px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.eb-bar-value { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 10.5px; font-weight: 800; color: #2C2318; background: rgba(255,255,255,0.9); border-radius: 4px; padding: 0 5px; line-height: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.eb-note { font-size: 11.5px; line-height: 1.65; color: #5C4E3A; margin: 6px 0 0; text-align: justify; }
+
+/* Édition */
+.eb-edit-col { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.eb-edit-row { display: flex; gap: 6px; align-items: center; }
+.eb-edit-row input { flex: 1; }
+.eb-check { font-size: 11px; display: inline-flex; gap: 4px; align-items: center; color: #5C4E3A; flex: 1; }
+.eb-small { font-size: 11px; color: #5C4E3A; }

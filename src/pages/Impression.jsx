@@ -10,6 +10,8 @@ import CalendrierAlternance from '../components/CalendrierAlternance';
 import { usePeriodesAlternance } from '../lib/usePeriodesAlternance';
 import { useAvantPropos } from '../lib/useAvantPropos';
 import { withLiveAge } from '../lib/age';
+import EntrepriseBlock from '../components/EntrepriseBlocks';
+import { ENTREPRISE_BLOCK_TYPES } from '../lib/entrepriseBlockTypes';
 
 // Fix pour les icônes Leaflet par défaut
 if (L && L.Icon && L.Icon.Default) {
@@ -257,12 +259,14 @@ const Impression = () => {
 
   const profile = data.profile;
   const formation = data.formation || {};
-  const entreprise = { ...DEFAULT_COMPANY, ...data.entreprise };
+  const entreprise = { ...DEFAULT_COMPANY, ...data.entreprise, ...(data.entreprise?.presentation || {}) };
   const chantiersSelectionnes = data.chantiers.filter(c => selectedChantierIds.includes(c.id));
   
   const sections = profile.sections || [];
   const formSections = formation.sections || [];
   const entSections = entreprise.sections || DEFAULT_COMPANY.sections;
+  const entPage = (n) => entSections.filter(s => (s.page || 1) === n);
+  const entPagesCount = Math.max(1, ...entSections.map(s => s.page || 1), 2); // la page 2 porte aussi la carte
   const avatarStyle = profile.avatar_style || { scale: 1, x: 0, y: 0 };
 
   // --- Sommaire intelligent + pagination X/Y (selon la sélection) ---
@@ -305,7 +309,7 @@ const Impression = () => {
   const pagesAvantPropos = selection.avantPropos ? 3 : 0; // introduction, mission, calendrier
   const pagesProfil = selection.profil ? 2 : 0;
   const pagesFormation = selection.formation ? 1 : 0;
-  const pagesEntreprise = selection.entreprise ? 2 : 0;
+  const pagesEntreprise = selection.entreprise ? entPagesCount + 1 : 0; // + organigramme
   const pagesChantiers = renderableChantiers.length * 2; // 2 pages / chantier
   const pagesRecapChantiers = showRecapChantiers ? chantierChunks.length : 0;
   const pagesRecapThemes = showRecapThemes ? 1 : 0;
@@ -421,6 +425,19 @@ const Impression = () => {
     );
   };
 
+  // Organigramme imprimé : la direction en haut, ses équipes réparties sur 2 colonnes
+  const renderOrgRoot = (root) => (
+    <div className="print-org-root">
+      <div className={`print-org-card root ${root.isUser ? 'user-highlight' : ''}`}>
+        <div className="org-name">{root.name}</div>
+        <div className="org-role">{root.role}</div>
+      </div>
+      <div className="print-org-columns">
+        {(root.children || []).map((child, i) => <div className="print-org-col-item" key={i}>{renderOrgNode(child, 1)}</div>)}
+      </div>
+    </div>
+  );
+
   const renderSection = (s) => {
     const getIcon = () => {
       const t = s.title?.toLowerCase() || '';
@@ -436,6 +453,7 @@ const Impression = () => {
       <div key={s.id} className="print-card">
         <div className="p-card-head">{getIcon()} <span>{s.title}</span></div>
         {isLang ? renderLanguages() :
+         ENTREPRISE_BLOCK_TYPES.includes(s.type) ? <EntrepriseBlock section={s} /> :
          s.type === 'TEXT' ? <p className="p-card-text">{s.content}</p> :
          s.type === 'TIMELINE' ? renderTimeline(s.content) : renderSkills(s.groups)}
       </div>
@@ -1286,7 +1304,7 @@ const Impression = () => {
                 <div className="p-header-main formation-header">
                   <div className="p-avatar-box">
                     <div className="p-avatar-ring" style={{ width: '130px', height: '130px', background: 'white !important', border: '3.5px solid var(--accent)' }}>
-                      <img src="/logo sogea.jpg" style={{ width: '100%', height: '100%', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', objectFit: 'contain', borderRadius: '50%' }} />
+                      <img src="/logo-sogea.png" style={{ width: '78%', height: '78%', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', objectFit: 'contain', borderRadius: '50%' }} />
                     </div>
                   </div>
                   <div className="p-info-box">
@@ -1301,28 +1319,53 @@ const Impression = () => {
                 <div className="p-content-grid">
                   <div className="p-col-left">
                     <div className="print-card"><div className="p-card-head"><Building2 size={20}/> <span>À propos de l'entreprise</span></div><p className="p-card-text">{entreprise.description}</p></div>
-                    <div className="print-card" style={{ padding: '20px 25px' }}>
-                      <div className="p-card-head"><MapPin size={20}/> <span>Implantations Nationales</span></div>
-                      <div className="print-national-map">
-                         <img src="/carte-sogea-environnement.webp" alt="Carte France SOGEA" style={{ width: '100%', height: 'auto', borderRadius: '12px' }} />
-                      </div>
-                      <div className="map-legend-print" style={{ borderTop: '1px solid var(--border)', paddingTop: '10px', marginTop: '15px' }}>
-                         <div className="leg-item"><div className="dot" style={{ background: '#E63946 !important' }}></div> <span>Maillage National — Plus de 80 implantations</span></div>
-                      </div>
-                    </div>
+                    {entPage(1).filter(s => s.column === 'LEFT').map(renderSection)}
                   </div>
                   <div className="p-col-right">
-                    {entSections.map(renderSection)}
+                    {entPage(1).filter(s => s.column !== 'LEFT').map(renderSection)}
                   </div>
                 </div>
                 <div className="page-context-footer">Mon Entreprise</div>
                 <div className="page-number-footer"></div>
               </div>
 
+              <div className="print-page-wrap" id="pg-entreprise-2">
+                <div className="p-content-grid">
+                  <div className="p-col-left">
+                    {entPage(2).filter(s => s.column === 'LEFT').map(renderSection)}
+                  </div>
+                  <div className="p-col-right">
+                    <div className="print-card" style={{ padding: '18px 22px' }}>
+                      <div className="p-card-head"><MapPin size={20}/> <span>Implantations nationales</span></div>
+                      <div className="print-national-map">
+                         <img src="/carte-sogea-environnement.webp" alt="Carte France SOGEA" style={{ width: '100%', maxHeight: '170px', objectFit: 'contain', borderRadius: '12px' }} />
+                      </div>
+                      <div className="map-legend-print" style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '10px' }}>
+                         <div className="leg-item"><div className="dot" style={{ background: '#E63946 !important' }}></div> <span>90 implantations · 5 directions régionales</span></div>
+                      </div>
+                    </div>
+                    {entPage(2).filter(s => s.column !== 'LEFT').map(renderSection)}
+                  </div>
+                </div>
+                <div className="page-context-footer">Mon Entreprise</div>
+                <div className="page-number-footer"></div>
+              </div>
+
+              {Array.from({ length: Math.max(0, entPagesCount - 2) }, (_, k) => k + 3).map(n => (
+                <div className="print-page-wrap" key={`ent-p${n}`}>
+                  <div className="p-content-grid">
+                    <div className="p-col-left">{entPage(n).filter(s => s.column === 'LEFT').map(renderSection)}</div>
+                    <div className="p-col-right">{entPage(n).filter(s => s.column !== 'LEFT').map(renderSection)}</div>
+                  </div>
+                  <div className="page-context-footer">Mon Entreprise</div>
+                  <div className="page-number-footer"></div>
+                </div>
+              ))}
+
               <div className="print-page-wrap">
                 <div className="p-card-head" style={{ marginBottom: '3rem' }}><Users size={24}/> <span style={{ fontSize: '24px' }}>Organigramme de l'agence</span></div>
                 <div className="print-org-tree-container">
-                  {entreprise.org_data ? renderOrgNode(entreprise.org_data) : renderOrgNode(DEFAULT_COMPANY.org_data)}
+                  {renderOrgRoot(entreprise.org_data || DEFAULT_COMPANY.org_data)}
                 </div>
                 <div className="page-context-footer">Mon Entreprise — Organigramme</div>
                 <div className="page-number-footer"></div>
@@ -1430,9 +1473,13 @@ const Impression = () => {
         .print-org-node-wrap::before { content: ""; position: absolute; left: 0; top: 0; width: 1.5px; height: 100%; background: var(--border); }
         .print-org-node-wrap::after { content: ""; position: absolute; left: 0; top: 20px; width: 24px; height: 1.5px; background: var(--border); }
         .print-org-node-wrap:last-child::before { height: 20px; }
-        .print-org-card { background: var(--bg-card) !important; border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 16px; width: 280px; -webkit-print-color-adjust: exact; margin-bottom: 8px; z-index: 2; position: relative; }
+        .print-org-root { display: flex; flex-direction: column; gap: 14px; }
+        .print-org-card.root { width: 320px; border-color: var(--accent); }
+        .print-org-columns { columns: 2; column-gap: 28px; }
+        .print-org-col-item { break-inside: avoid; margin-bottom: 4px; }
+        .print-org-card { background: var(--bg-card) !important; border: 1.5px solid var(--border); border-radius: 10px; padding: 6px 12px; width: 250px; -webkit-print-color-adjust: exact; margin-bottom: 5px; z-index: 2; position: relative; }
         .print-org-card.user-highlight { border: 2px solid var(--accent); background: white !important; box-shadow: 0 4px 10px rgba(139,110,78,0.1); }
-        .org-name { font-weight: 800; font-size: 11px; text-transform: uppercase; color: var(--ink); line-height: 1.2; }
+        .org-name { font-weight: 800; font-size: 10px; text-transform: uppercase; color: var(--ink); line-height: 1.2; }
         .org-role { font-size: 8px; color: var(--accent); font-weight: 700; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
         .print-org-children { display: flex; flex-direction: column; gap: 4px; }
 

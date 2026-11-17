@@ -5,6 +5,8 @@ import {
   Edit2, Save, X, Plus, Trash2, Mail, Phone, Camera, Maximize, Clock, Check, Award, BookOpen, Star, ExternalLink, UserPlus, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import EntrepriseBlock from '../components/EntrepriseBlocks';
+import { ENTREPRISE_BLOCK_TYPES } from '../lib/entrepriseBlockTypes';
 import { MapContainer, TileLayer, Marker, Popup, useMap, GeoJSON, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -295,9 +297,11 @@ export default function Entreprise() {
       try {
         const { data } = await supabase.from('company_profile').select('*').maybeSingle();
         if (data) {
-          setCompany(data);
-          setSections(data.sections || DEFAULT_COMPANY.sections);
-          setOrgData(data.org_data || DEFAULT_COMPANY.org_data);
+          // Nouvelle présentation (colonne "presentation") prioritaire sur l'ancienne
+          const pres = data.presentation || {};
+          setCompany({ ...data, ...pres });
+          setSections(pres.sections || data.sections || DEFAULT_COMPANY.sections);
+          setOrgData(pres.org_data || data.org_data || DEFAULT_COMPANY.org_data);
         }
       } catch (err) { 
         console.error("Erreur chargement:", err); 
@@ -313,13 +317,14 @@ export default function Entreprise() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const toSave = { ...company, sections, org_data: orgData };
-      if (!toSave.id) {
-        toSave.id = '550e8400-e29b-41d4-a716-446655442222';
-      }
-      const { error } = await supabase.from('company_profile').upsert(toSave);
+      const id = company.id || '550e8400-e29b-41d4-a716-446655442222';
+      const presentation = {
+        eyebrow: company.eyebrow, name: company.name, sub: company.sub, website: company.website,
+        description: company.description, sections, org_data: orgData,
+      };
+      const { error } = await supabase.from('company_profile').upsert({ id, presentation });
       if (error) throw error;
-      setCompany(toSave);
+      setCompany({ ...company, id, presentation });
       setIsEditing(false);
     } catch (err) { 
       console.error("Erreur de sauvegarde de l'entreprise :", err);
@@ -333,7 +338,10 @@ export default function Entreprise() {
     const newSection = {
       id: Date.now().toString(),
       type,
-      title: type === 'TEXT' ? 'Nouvelle Section' : type === 'TIMELINE' ? 'Nouvel Engagement' : 'Nouvelles Compétences',
+      title: { TEXT: 'Nouvelle section', TIMELINE: 'Nouvel engagement', SKILLS: 'Nouvelles compétences', CHAIN: 'Du groupe à mon agence', KPIS: 'Chiffres clés', BARS: 'Graphique' }[type],
+      items: ENTREPRISE_BLOCK_TYPES.includes(type) ? [] : undefined,
+      unit: type === 'BARS' ? '' : undefined,
+      page: 2,
       content: type === 'TEXT' ? 'Contenu ici...' : type === 'TIMELINE' ? [] : undefined,
       groups: type === 'SKILLS' ? [{ title: 'Groupe', pills: [] }] : undefined,
       column: 'LEFT'
@@ -352,7 +360,7 @@ export default function Entreprise() {
       <div className="profil-header">
         <div className="profil-avatar-wrap">
           <div className="profil-avatar-ring">
-            <img src="/logo sogea.jpg" alt="Logo Sogea" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '10px' }} />
+            <img src="/logo-sogea.png" alt="Logo Sogea" style={{ position: 'absolute', inset: 0, margin: 'auto', width: '74%', height: '74%', objectFit: 'contain' }} />
           </div>
         </div>
 
@@ -396,14 +404,14 @@ export default function Entreprise() {
           </div>
 
           <div className="profil-card">
-            <h3 className="profil-card-title"><MapPin size={15} /> Implantations Nationales</h3>
+            <h3 className="profil-card-title"><MapPin size={15} /> Implantations nationales</h3>
             <div style={{ marginTop: '1.5rem', borderRadius: '16px', overflow: 'hidden', border: '1.5px solid var(--border-str)', background: 'white' }}>
               <img src="/carte-sogea-environnement.webp" alt="Une présence sur tout le territoire" style={{ width: '100%', height: 'auto', display: 'block' }} />
             </div>
             <div style={{ padding: '1rem', fontSize: '11px', lineHeight: '1.6', background: 'var(--bg-stripe)', borderRadius: '0 0 16px 16px', border: '1.5px solid var(--border-str)', borderTop: 'none' }}>
                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-cord)' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-cord)' }}></div>
-                  <span><strong>Maillage National</strong> — Plus de 80 implantations et 5 Directions régionales</span>
+                  <span><strong>Maillage national</strong> — 90 implantations et 5 directions régionales</span>
                </div>
             </div>
           </div>
@@ -426,6 +434,9 @@ export default function Entreprise() {
                   <button className="template-btn" onClick={() => addSection('TEXT')}>Texte</button>
                   <button className="template-btn" onClick={() => addSection('TIMELINE')}>Parcours</button>
                   <button className="template-btn" onClick={() => addSection('SKILLS')}>Compétences</button>
+                  <button className="template-btn" onClick={() => addSection('CHAIN')}>Chaîne / structure</button>
+                  <button className="template-btn" onClick={() => addSection('KPIS')}>Chiffres clés</button>
+                  <button className="template-btn" onClick={() => addSection('BARS')}>Graphique</button>
                 </div>
               )}
             </div>
@@ -496,6 +507,7 @@ function DynamicSection({ section, isEditing, setSections, sections }) {
           <button className="btn-icon-sm" onClick={moveUp} title="Monter"><ChevronUp size={12} /></button>
           <button className="btn-icon-sm" onClick={moveDown} title="Descendre"><ChevronDown size={12} /></button>
           {section.column === 'LEFT' && <button className="btn-icon-sm" onClick={() => update({ column: 'RIGHT' })} title="Déplacer à droite"><ChevronRight size={12} /></button>}
+          <button className="btn-icon-sm" onClick={() => update({ page: ((section.page || 1) % 4) + 1 })} title="Page du PDF où apparaît cette section (1 à 4)" style={{ width: 'auto', padding: '0 6px', fontSize: '10px', fontWeight: 700 }}>PDF p.{section.page || 1}</button>
           <button className="btn-icon-sm delete" onClick={() => setSections(sections.filter(s => s.id !== section.id))} title="Supprimer"><Trash2 size={12} /></button>
         </div>
       )}
@@ -503,6 +515,7 @@ function DynamicSection({ section, isEditing, setSections, sections }) {
         {section.type === 'TIMELINE' ? <BookOpen size={15} /> : section.type === 'SKILLS' ? <Award size={15} /> : <Star size={15} />}
         {isEditing ? <input className="profil-edit-input" style={{ fontWeight: 700 }} value={section.title} onChange={e => update({ title: e.target.value })} /> : section.title}
       </h3>
+      {ENTREPRISE_BLOCK_TYPES.includes(section.type) && <EntrepriseBlock section={section} isEditing={isEditing} update={update} />}
       {section.type === 'TEXT' && (isEditing ? <textarea className="profil-edit-input" value={section.content} onChange={e => update({ content: e.target.value })} /> : <p className="profil-about-text">{section.content}</p>)}
       {section.type === 'SKILLS' && (
         <div className="profil-skills">
