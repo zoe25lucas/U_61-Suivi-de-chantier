@@ -43,7 +43,7 @@ function KpisBlock({ section, isEditing, update }) {
   const setItem = (i, patch) => update({ items: items.map((it, j) => (j === i ? { ...it, ...patch } : it)) });
   return (
     <>
-      <div className="eb-kpis">
+      <div className="eb-kpis" style={{ gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, items.length))}, 1fr)` }}>
         {items.map((it, i) => (
           <div key={i} className="eb-kpi">
             {isEditing ? (
