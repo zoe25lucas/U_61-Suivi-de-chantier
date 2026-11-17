@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import EntrepriseBlock from '../components/EntrepriseBlocks';
+import OrgChart from '../components/OrgChart';
 import { ENTREPRISE_BLOCK_TYPES } from '../lib/entrepriseBlockTypes';
 import { MapContainer, TileLayer, Marker, Popup, useMap, GeoJSON, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
@@ -447,13 +448,17 @@ export default function Entreprise() {
 
       <div className="profil-card" style={{ marginTop: '2rem' }}>
         <h3 className="profil-card-title"><Users size={15} /> Organigramme de l'agence</h3>
-        <div style={{ marginTop: '2rem', paddingLeft: '2rem' }}>
-          <OrgNode 
-            node={orgData} 
-            isEditing={isEditing} 
-            onUpdate={setOrgData} 
-          />
-        </div>
+        {isEditing ? (
+          <div style={{ marginTop: '2rem', paddingLeft: '2rem' }}>
+            <OrgNode 
+              node={orgData} 
+              isEditing={isEditing} 
+              onUpdate={setOrgData} 
+            />
+          </div>
+        ) : (
+          <div style={{ marginTop: '1.5rem' }}><OrgChart data={orgData} /></div>
+        )}
       </div>
     </div>
   );

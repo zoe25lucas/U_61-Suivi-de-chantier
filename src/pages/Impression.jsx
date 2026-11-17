@@ -11,6 +11,7 @@ import { usePeriodesAlternance } from '../lib/usePeriodesAlternance';
 import { useAvantPropos } from '../lib/useAvantPropos';
 import { withLiveAge } from '../lib/age';
 import EntrepriseBlock from '../components/EntrepriseBlocks';
+import OrgChart from '../components/OrgChart';
 import { ENTREPRISE_BLOCK_TYPES } from '../lib/entrepriseBlockTypes';
 
 // Fix pour les icônes Leaflet par défaut
@@ -436,19 +437,6 @@ const Impression = () => {
                          <div className="leg-item"><div className="dot" style={{ background: '#E63946 !important' }}></div> <span>90 implantations · 5 directions régionales</span></div>
                       </div>
                     </div>
-  );
-
-  // Organigramme imprimé : la direction en haut, ses équipes réparties sur 2 colonnes
-  const renderOrgRoot = (root) => (
-    <div className="print-org-root">
-      <div className={`print-org-card root ${root.isUser ? 'user-highlight' : ''}`}>
-        <div className="org-name">{root.name}</div>
-        <div className="org-role">{root.role}</div>
-      </div>
-      <div className="print-org-columns">
-        {(root.children || []).map((child, i) => <div className="print-org-col-item" key={i}>{renderOrgNode(child, 1)}</div>)}
-      </div>
-    </div>
   );
 
   const renderSection = (s) => {
@@ -1368,9 +1356,9 @@ const Impression = () => {
               ))}
 
               <div className="print-page-wrap">
-                <div className="p-card-head" style={{ marginBottom: '3rem' }}><Users size={24}/> <span style={{ fontSize: '24px' }}>Organigramme de l'agence</span></div>
+                <div className="p-card-head" style={{ marginBottom: '1.5rem' }}><Users size={24}/> <span style={{ fontSize: '24px' }}>Organigramme de l'agence</span></div>
                 <div className="print-org-tree-container">
-                  {renderOrgRoot(entreprise.org_data || DEFAULT_COMPANY.org_data)}
+                  <OrgChart data={entreprise.org_data || DEFAULT_COMPANY.org_data} compact />
                 </div>
                 <div className="page-context-footer">Mon Entreprise — Organigramme</div>
                 <div className="page-number-footer"></div>
