@@ -28,3 +28,9 @@
 .eb-edit-row input { flex: 1; }
 .eb-check { font-size: 11px; display: inline-flex; gap: 4px; align-items: center; color: #5C4E3A; flex: 1; }
 .eb-small { font-size: 11px; color: #5C4E3A; }
+
+/* Photos */
+.eb-photos { display: grid; gap: 10px; }
+.eb-photo { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.eb-photo img { width: 100%; height: 150px; object-fit: cover; border-radius: 10px; display: block; }
+.eb-photo figcaption { font-size: 10px; color: #8B6E4E; font-weight: 600; line-height: 1.3; }

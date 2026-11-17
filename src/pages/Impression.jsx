@@ -266,7 +266,7 @@ const Impression = () => {
   const formSections = formation.sections || [];
   const entSections = entreprise.sections || DEFAULT_COMPANY.sections;
   const entPage = (n) => entSections.filter(s => (s.page || 1) === n);
-  const entPagesCount = Math.max(1, ...entSections.map(s => s.page || 1), 2); // la page 2 porte aussi la carte
+  const entPagesCount = Math.max(1, ...entSections.map(s => s.page || 1), entreprise.map_page || 2); // + page de la carte
   const avatarStyle = profile.avatar_style || { scale: 1, x: 0, y: 0 };
 
   // --- Sommaire intelligent + pagination X/Y (selon la sélection) ---
@@ -424,6 +424,19 @@ const Impression = () => {
       </div>
     );
   };
+
+  // Carte des implantations (page choisie par map_page)
+  const renderEntMap = () => (
+                    <div className="print-card" style={{ padding: '18px 22px' }}>
+                      <div className="p-card-head"><MapPin size={20}/> <span>Implantations nationales</span></div>
+                      <div className="print-national-map">
+                         <img src="/carte-sogea-environnement.webp" alt="Carte France SOGEA" style={{ width: '100%', maxHeight: '170px', objectFit: 'contain', borderRadius: '12px' }} />
+                      </div>
+                      <div className="map-legend-print" style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '10px' }}>
+                         <div className="leg-item"><div className="dot" style={{ background: '#E63946 !important' }}></div> <span>90 implantations · 5 directions régionales</span></div>
+                      </div>
+                    </div>
+  );
 
   // Organigramme imprimé : la direction en haut, ses équipes réparties sur 2 colonnes
   const renderOrgRoot = (root) => (
@@ -1335,15 +1348,7 @@ const Impression = () => {
                     {entPage(2).filter(s => s.column === 'LEFT').map(renderSection)}
                   </div>
                   <div className="p-col-right">
-                    <div className="print-card" style={{ padding: '18px 22px' }}>
-                      <div className="p-card-head"><MapPin size={20}/> <span>Implantations nationales</span></div>
-                      <div className="print-national-map">
-                         <img src="/carte-sogea-environnement.webp" alt="Carte France SOGEA" style={{ width: '100%', maxHeight: '170px', objectFit: 'contain', borderRadius: '12px' }} />
-                      </div>
-                      <div className="map-legend-print" style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '10px' }}>
-                         <div className="leg-item"><div className="dot" style={{ background: '#E63946 !important' }}></div> <span>90 implantations · 5 directions régionales</span></div>
-                      </div>
-                    </div>
+                    {(entreprise.map_page || 2) === 2 && renderEntMap()}
                     {entPage(2).filter(s => s.column !== 'LEFT').map(renderSection)}
                   </div>
                 </div>
@@ -1355,7 +1360,7 @@ const Impression = () => {
                 <div className="print-page-wrap" key={`ent-p${n}`}>
                   <div className="p-content-grid">
                     <div className="p-col-left">{entPage(n).filter(s => s.column === 'LEFT').map(renderSection)}</div>
-                    <div className="p-col-right">{entPage(n).filter(s => s.column !== 'LEFT').map(renderSection)}</div>
+                    <div className="p-col-right">{(entreprise.map_page || 2) === n && renderEntMap()}{entPage(n).filter(s => s.column !== 'LEFT').map(renderSection)}</div>
                   </div>
                   <div className="page-context-footer">Mon Entreprise</div>
                   <div className="page-number-footer"></div>

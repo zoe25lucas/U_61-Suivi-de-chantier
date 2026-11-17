@@ -320,7 +320,7 @@ export default function Entreprise() {
       const id = company.id || '550e8400-e29b-41d4-a716-446655442222';
       const presentation = {
         eyebrow: company.eyebrow, name: company.name, sub: company.sub, website: company.website,
-        description: company.description, sections, org_data: orgData,
+        description: company.description, sections, org_data: orgData, map_page: company.map_page,
       };
       const { error } = await supabase.from('company_profile').upsert({ id, presentation });
       if (error) throw error;
@@ -338,7 +338,7 @@ export default function Entreprise() {
     const newSection = {
       id: Date.now().toString(),
       type,
-      title: { TEXT: 'Nouvelle section', TIMELINE: 'Nouvel engagement', SKILLS: 'Nouvelles compétences', CHAIN: 'Du groupe à mon agence', KPIS: 'Chiffres clés', BARS: 'Graphique' }[type],
+      title: { TEXT: 'Nouvelle section', TIMELINE: 'Nouvel engagement', SKILLS: 'Nouvelles compétences', CHAIN: 'Du groupe à mon agence', KPIS: 'Chiffres clés', BARS: 'Graphique', PHOTOS: 'Photos' }[type],
       items: ENTREPRISE_BLOCK_TYPES.includes(type) ? [] : undefined,
       unit: type === 'BARS' ? '' : undefined,
       page: 2,
@@ -437,6 +437,7 @@ export default function Entreprise() {
                   <button className="template-btn" onClick={() => addSection('CHAIN')}>Chaîne / structure</button>
                   <button className="template-btn" onClick={() => addSection('KPIS')}>Chiffres clés</button>
                   <button className="template-btn" onClick={() => addSection('BARS')}>Graphique</button>
+                  <button className="template-btn" onClick={() => addSection('PHOTOS')}>Photos</button>
                 </div>
               )}
             </div>
