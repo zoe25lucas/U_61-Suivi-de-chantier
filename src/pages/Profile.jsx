@@ -12,7 +12,7 @@ const DEFAULT_PROFILE = {
   job_title: "Étudiante",
   age_text: "Étudiante - 21 ans (25.04.2005)",
   email: "zoe25.lucas@gmail.com",
-  phone: "+33 7 60 90 75 54",
+  phone: "07 69 54 67 12",
   address: "2b rue de la forge, 57 200 Rémelfing (France)",
   description: "Après avoir effectué 2 ans de médecine en Allemagne, j'ai su que ce n'était pas vraiment fait pour moi. Au lieu de s'en rendre compte dans 10 ans, je préfère changer de voie maintenant. Je me suis rendue compte qu'il valait mieux suivre ses passions, plutôt que de courir derrière la notoriété et la reconnaissance sociale.",
   avatar_url: "/photo.jpg",
