@@ -877,10 +877,10 @@ const Impression = () => {
               ))}
               <ThemeExtras sec={sec} print />
               {imgs.length > 0 && (
-                <div className={`p-theme-imgs n${Math.min(imgs.length, 3)}`}>
+                <div className={`p-theme-imgs n${sec.printCols || Math.min(imgs.length, 3)}`}>
                   {imgs.map(img => (
                     <figure key={img.id || img.url}>
-                      <img src={img.url} alt={img.caption || ''} />
+                      <img src={img.url} alt={img.caption || ''} style={sec.printImgH ? { height: sec.printImgH } : undefined} />
                       {img.caption && <figcaption>{img.caption}</figcaption>}
                     </figure>
                   ))}
@@ -1654,6 +1654,8 @@ const Impression = () => {
         .p-theme-imgs { display: grid; gap: 8px; margin-top: 8px; grid-template-columns: repeat(3, 1fr); }
         .p-theme-imgs.n1 { grid-template-columns: 1fr; }
         .p-theme-imgs.n2 { grid-template-columns: repeat(2, 1fr); }
+        .p-theme-imgs.n4 { grid-template-columns: repeat(4, 1fr); }
+        .p-theme-imgs.n5 { grid-template-columns: repeat(5, 1fr); }
         .p-theme-imgs figure { margin: 0; display: flex; flex-direction: column; gap: 3px; }
         .p-theme-imgs img { width: 100%; height: 125px; object-fit: contain; background: #fff; border: 1px solid var(--border); border-radius: 8px; -webkit-print-color-adjust: exact; }
         .p-theme-imgs.n1 img { height: 170px; }
