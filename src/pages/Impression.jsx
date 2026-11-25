@@ -624,9 +624,12 @@ const Impression = () => {
                   <div className="p-data-table-mini">
                      <div className="p-dt-row"><span>MOA</span><strong>{c.maitreOuvrage || "-"}</strong></div>
                      <div className="p-dt-row"><span>MOE</span><strong>{c.maitreOeuvre || "-"}</strong></div>
-                     <div className="p-dt-row"><span>CSPS</span><strong>-</strong></div>
-                     <div className="p-dt-row"><span>CT</span><strong>-</strong></div>
+                     <div className="p-dt-row"><span>CSPS</span><strong>{c.csps || "-"}</strong></div>
+                     <div className="p-dt-row"><span>CT</span><strong>{c.controleTechnique || "-"}</strong></div>
                      <div className="p-dt-row"><span>MARCHÉ</span><strong>{c.marche || "-"}</strong></div>
+                     {(c.sous_traitants || []).filter(st => st.nom).map((st, i) => (
+                       <div className="p-dt-row" key={i}><span>S-T {String(st.prestation || '').toUpperCase()}</span><strong>{st.nom}</strong></div>
+                     ))}
                   </div>
                </div>
                <div className="print-card">

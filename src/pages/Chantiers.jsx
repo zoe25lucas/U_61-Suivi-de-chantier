@@ -13,6 +13,7 @@ import {
   Camera,
   Plus,
   Trash2,
+  Users,
   FileText,
   Edit,
   Save,
@@ -928,6 +929,7 @@ const Chantiers = () => {
       travauxEffectues: selectedChantier.travauxEffectues,
       competencesMobilisees: selectedChantier.competencesMobilisees,
       conducteurTravaux: selectedChantier.conducteurTravaux,
+      sous_traitants: selectedChantier.sous_traitants || [],
       fichiersJoints: selectedChantier.fichiersJoints,
       documentsSpecifiques: selectedChantier.documentsSpecifiques,
       datesChantier: selectedChantier.datesChantier,
@@ -1033,6 +1035,8 @@ const Chantiers = () => {
       travauxEffectues, competencesMobilisees, datesChantier, photo_principale,
       documentsEtude, etudesGeotechniques, diagnostics, plansDocuments, planifications, securite
     } = selectedChantier;
+    const sousTraitants = selectedChantier.sous_traitants || [];
+    const updateSousTraitant = (i, key, value) => handleUpdateSelected('sous_traitants', sousTraitants.map((st, j) => j === i ? { ...st, [key]: value } : st));
 
     // Chantier parent (pour le fil d'Ariane) et chantiers éligibles comme parent
     const parentChantier = parent_id ? chantiers.find(c => String(c.id) === String(parent_id)) : null;
@@ -1505,6 +1509,39 @@ const Chantiers = () => {
                   </div>
 
                 </div>
+
+                {(isEditing || sousTraitants.length > 0) && (
+                  <div className="chantier-section-card">
+                    <h3 className="section-card-title"><Users size={18} /> Sous-traitants</h3>
+                    <div className="data-table">
+                      {sousTraitants.map((st, i) => (
+                        <div key={i} className="data-row">
+                          {isEditing ? (
+                            <>
+                              <input value={st.nom || ''} placeholder="Entreprise" onChange={(e) => updateSousTraitant(i, 'nom', e.target.value)}
+                                style={{ border: 'none', background: 'transparent', borderBottom: '1px solid #eee', fontSize: '12px', width: '45%' }} />
+                              <input value={st.prestation || ''} placeholder="Prestation" onChange={(e) => updateSousTraitant(i, 'prestation', e.target.value)}
+                                style={{ border: 'none', background: 'transparent', textAlign: 'right', borderBottom: '1px solid #eee', fontSize: '12px', width: '40%' }} />
+                              <button type="button" onClick={() => handleUpdateSelected('sous_traitants', sousTraitants.filter((_, j) => j !== i))}
+                                style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#c0392b' }} title="Supprimer"><Trash2 size={14} /></button>
+                            </>
+                          ) : (
+                            <>
+                              <span className="data-label">{st.prestation}</span>
+                              <span className="data-value">{st.nom}</span>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {isEditing && (
+                      <button type="button" className="btn-ghost" style={{ marginTop: '10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        onClick={() => handleUpdateSelected('sous_traitants', [...sousTraitants, { nom: '', prestation: '' }])}>
+                        <Plus size={14} /> Ajouter un sous-traitant
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="chantier-col-right" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
