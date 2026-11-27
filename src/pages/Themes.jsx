@@ -22,6 +22,8 @@ import {
   Award
 } from 'lucide-react';
 import './Themes.css';
+import ThemeDocument from '../components/ThemeDocument';
+import { THEME_DOCS } from '../data/themeDocs';
 
 // Competency Data
 const COMPETENCES_DATA = {
@@ -719,6 +721,9 @@ const Themes = () => {
               </div>
             </div>
           ) : (
+            THEME_DOCS[selectedTheme.id] ? (
+              <ThemeDocument docKey={THEME_DOCS[selectedTheme.id].key} onImageClick={setEnlargedImage} />
+            ) : (
             // High-End Structured Dossier View
             <div className="theme-dossier-view">
               
@@ -874,6 +879,7 @@ const Themes = () => {
 
               </div>
             </div>
+            )
           )}
         </div>
 

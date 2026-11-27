@@ -6,6 +6,7 @@ import {
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { THEME_DOCS, themeDocPages } from '../data/themeDocs';
 import CalendrierAlternance from '../components/CalendrierAlternance';
 import { usePeriodesAlternance } from '../lib/usePeriodesAlternance';
 import { useAvantPropos } from '../lib/useAvantPropos';
@@ -314,7 +315,8 @@ const Impression = () => {
   const pagesChantiers = renderableChantiers.length * 2; // 2 pages / chantier
   const pagesRecapChantiers = showRecapChantiers ? chantierChunks.length : 0;
   const pagesRecapThemes = showRecapThemes ? 1 : 0;
-  const pagesThemes = themesToPrint.length; // 1 page / thème
+  const themePageCount = (t) => (THEME_DOCS[t.id] ? THEME_DOCS[t.id].pages : 1);
+  const pagesThemes = themesToPrint.reduce((n, t) => n + themePageCount(t), 0); // 1 page / thème (ou pages du document)
   const pagesComp = selection.competences ? 1 : 0;
   const hasAnySelection = (pagesAvantPropos + pagesProfil + pagesFormation + pagesEntreprise + pagesChantiers + pagesRecapChantiers + pagesRecapThemes + pagesThemes + pagesComp) > 0;
 
@@ -339,7 +341,7 @@ const Impression = () => {
   // Récap thèmes AVANT les pages thèmes
   if (pagesRecapThemes) { sectionPages.recapThemes = pageCursor; pageCursor += pagesRecapThemes; }
   const themePageMap = {};
-  themesToPrint.forEach(t => { themePageMap[t.id] = pageCursor; pageCursor += 1; });
+  themesToPrint.forEach(t => { themePageMap[t.id] = pageCursor; pageCursor += themePageCount(t); });
   if (pagesComp) { sectionPages.competences = pageCursor; pageCursor += pagesComp; }
   const totalPages = pageCursor - 1;
 
@@ -836,6 +838,18 @@ const Impression = () => {
 
   // Page d'un thème d'étude
   const renderThemePage = (theme) => {
+    const doc = THEME_DOCS[theme.id];
+    if (doc) {
+      return (
+        <React.Fragment key={theme.id}>
+          {themeDocPages(doc).map((src, i) => (
+            <div className="print-page-wrap p-docpage" key={`${theme.id}-${i}`} id={i === 0 ? `pg-theme-${theme.id}` : undefined}>
+              <img src={src} alt={`${theme.title} — page ${i + 1}`} />
+            </div>
+          ))}
+        </React.Fragment>
+      );
+    }
     const comps = theme.competences || [];
     const linkedCh = data.chantiers.find(c => c.id === theme.chantier_id);
     return (
@@ -1422,6 +1436,8 @@ const Impression = () => {
             margin-bottom: 0;
           }
         }
+        .p-docpage { padding: 0 !important; background: #fff !important; }
+        .p-docpage img { display: block; width: 210mm; height: 296mm; object-fit: contain; }
         .page-number-footer { position: absolute; bottom: 30px; right: 60px; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 800; color: var(--accent); letter-spacing: 1.5px; opacity: 0.6; text-transform: uppercase; z-index: 100; }
         .page-number-footer::after { content: "PAGE " counter(page) " / " var(--total-pages, ""); }
         .page-context-footer { position: absolute; bottom: 30px; left: 70px; font-size: 10px; font-family: 'Inter', sans-serif; font-weight: 800; color: var(--accent); letter-spacing: 1.2px; opacity: 0.55; text-transform: uppercase; z-index: 100; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

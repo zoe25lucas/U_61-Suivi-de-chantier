@@ -1,0 +1,25 @@
+.theme-doc-sheet {
+  max-width: 880px;
+  margin: 0 auto 3rem;
+  background: #fff;
+  color: #2B2118;
+  border-radius: 18px;
+  padding: 48px 56px;
+  box-shadow: 0 6px 30px rgba(43, 33, 24, 0.08);
+  font-family: Arial, Helvetica, sans-serif;
+}
+.theme-doc-msg { text-align: center; color: #8B6B4A; font-weight: 600; }
+.theme-doc-sheet p { hyphens: auto; }
+.theme-doc-sheet img { cursor: zoom-in; border-radius: 2px; }
+.theme-doc-sheet .td-tw { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.theme-doc-sheet td { word-break: normal; overflow-wrap: anywhere; }
+.theme-doc-sheet .td-sec + .td-sec { margin-top: 56px; padding-top: 8px; border-top: 1px dashed #D9CDBA; }
+.theme-doc-sheet .td-progress {
+  position: sticky; top: 0; z-index: 5; background: #fff;
+  padding: 8px 0 6px; margin-bottom: 18px; border-bottom: 1px solid #D9CDBA;
+}
+@media (max-width: 700px) {
+  .theme-doc-sheet { padding: 22px 14px; border-radius: 0; margin: 0 -1rem 2rem; }
+  .theme-doc-sheet .td-progress { position: static; }
+  .theme-doc-sheet table { min-width: 0; }
+}
